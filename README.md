@@ -67,7 +67,7 @@ The whole game is a single file: [`index.html`](index.html). Open it in a browse
 
 <div align="center">
 
-Made with 💚 by [@eleuthpap](https://github.com/eleuthpap)
+Made with 🧡 by [@eleuthpap](https://github.com/eleuthpap)
 
 **[Play Numberle →](https://eleuthpap.github.io/numberle/)**
 
