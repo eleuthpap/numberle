@@ -495,7 +495,7 @@
     <p><b>4.</b> First to crack the other's number wins. If you crack it first in a round, the other player still gets that round's turn to tie.</p>
     <p><b>Emoji:</b> swipe the emoji strip above the keypad and tap one to send it. Hold an emoji to keep sending until you let go.</p>
     <p><b>Solo:</b> tap <b>Play solo</b> to crack a random number on your own. You get 10 guesses.</p>
-    <p>For two-player games, keep the page open while you play. Phones connect directly to each other, so both need internet.</p>
+    <p>For two-player games, keep the page open while you play. Both phones need internet, on any network.</p>
     <h3 class="settings-h">Settings</h3>
     <label class="setting"><input type="checkbox" id="optCb"><span>Colorblind mode</span><small>symbols, blue and orange</small></label>
     <label class="setting"><input type="checkbox" id="optHaptics"><span>Vibration</span></label>
@@ -503,7 +503,7 @@
   </div>
 </div>
 
-<script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/mqtt@5.15.2/dist/mqtt.min.js"></script>
 <script>
 (function () {
   const LEN = 5, MAX = 8, SMAX = 10, SOLVED = "ccccc";
@@ -595,87 +595,80 @@
   const EMO = ["😂", "😱", "🔥", "🤡", "🐢", "👀", "❤️", "👍", "👏", "😎", "🥳", "😭", "🤔", "💀", "🎉", "🙈"];
   let myEmoSeq = 0, myEmoList = [], oppEmoSeen = null, emoTimes = [];
 
-  // ---------- network: direct phone-to-phone link via PeerJS ----------
-  // Presents the same small interface the game uses (presence / onPeers / onConnection / leave).
-  // Each side keeps one state object and sends it whole whenever it changes.
-  function joinNet(code, role) {
-    if (typeof window.Peer !== "function") return Promise.reject({ code: "no_peerjs" });
-    const hostId = "numberle-duel-v1-" + code;
-    let peer = null, conn = null, mine = {}, remote = null, lastSeen = 0, closed = false;
-    let handlers = [], connHandlers = [], retryT = null, hb = null, wasOnline = false;
+  // ---------- network: relay through public MQTT message servers ----------
+  // Works on any network (plain secure web connections). Each side publishes its whole state
+  // as a retained message on its own topic and listens to the other side's topic. Two independent
+  // servers are used at once, so the game keeps working if one of them is down.
+  const BROKERS = window.NUMBERLE_BROKERS || [
+    "wss://broker.hivemq.com:8884/mqtt",
+    "wss://broker.emqx.io:8084/mqtt"
+  ];
+  const STALE_MS = 15000, BEAT_MS = 4000;
 
-    const online = () => !!(remote && conn && conn.open && Date.now() - lastSeen < 12000);
+  function joinNet(code, role, onTrouble) {
+    if (!window.mqtt || typeof window.mqtt.connect !== "function") return Promise.reject({ code: "no_mqtt" });
+    const base = "numberle/v2/" + code + "/";
+    const myTopic = base + role, theirTopic = base + (role === "host" ? "guest" : "host");
+    const sender = myId + "-" + Math.random().toString(36).slice(2, 8);
+    let mine = {}, remote = null, remoteTs = 0, lastHeard = 0, closed = false;
+    let handlers = [], connHandlers = [], wasOnline = false, pubT = null, anyConnected = false;
+
+    const online = () => !!remote && Date.now() - lastHeard < STALE_MS && Date.now() - remoteTs < STALE_MS * 2;
     const emitPeers = () => {
       const on = online();
       const peers = on ? [{ sameTab: false, presence: remote }] : [];
       handlers.forEach(h => { try { h({ peers }); } catch (e) {} });
       if (on !== wasOnline) { wasOnline = on; connHandlers.forEach(h => { try { h(on); } catch (e) {} }); }
     };
-    const sendState = () => { if (conn && conn.open) { try { conn.send({ t: "state", p: mine }); } catch (e) {} } };
 
-    function attach(c) {
-      if (conn && conn !== c) { try { conn.close(); } catch (e) {} }
-      conn = c;
-      c.on("open", () => { lastSeen = Date.now(); sendState(); });
-      c.on("data", m => {
-        if (!m || typeof m !== "object") return;
-        lastSeen = Date.now();
-        if (m.t === "state" && m.p && typeof m.p === "object") { remote = m.p; emitPeers(); }
+    const clients = BROKERS.map(url => {
+      const c = window.mqtt.connect(url, {
+        clientId: "nl-" + sender + "-" + Math.random().toString(36).slice(2, 6),
+        clean: true, keepalive: 30, reconnectPeriod: 3000, connectTimeout: 10000
       });
-      c.on("close", () => {
-        if (conn !== c) return;
-        conn = null; emitPeers();
-        if (role === "guest") later(connect, 2000);
+      c.on("connect", () => {
+        anyConnected = true;
+        c.subscribe(theirTopic, { qos: 0 });
+        publishNow();
+      });
+      c.on("message", (topic, payload) => {
+        if (topic !== theirTopic) return;
+        let m; try { m = JSON.parse(payload.toString()); } catch (e) { return; }
+        if (!m || typeof m !== "object" || !m.p || typeof m.p !== "object" || typeof m.ts !== "number") return;
+        if (m.ts < remoteTs) return;                       // older copy (the other server, or a retained one)
+        const fresh = Date.now() - m.ts < STALE_MS * 2;    // a retained message from a phone that left long ago
+        remoteTs = m.ts; remote = m.p;
+        if (fresh) lastHeard = Date.now();
+        emitPeers();
       });
       c.on("error", () => {});
-      if (c.open) sendState();
-    }
+      return c;
+    });
 
-    function later(fn, ms) { if (closed) return; clearTimeout(retryT); retryT = setTimeout(fn, ms); }
-
-    function connect() {
-      if (closed || !peer || peer.destroyed) return;
-      if (peer.disconnected) { try { peer.reconnect(); } catch (e) {} later(connect, 2500); return; }
-      if (conn && conn.open) return;
-      attach(peer.connect(hostId, { reliable: true }));
-      later(() => { if (!(conn && conn.open)) connect(); }, 6000);
-    }
-
-    function makePeer() {
+    function publishNow() {
+      clearTimeout(pubT); pubT = null;
       if (closed) return;
-      try { if (peer) peer.destroy(); } catch (e) {}
-      peer = role === "host" ? new window.Peer(hostId, { debug: 0 }) : new window.Peer({ debug: 0 });
-      peer.on("open", () => { if (role === "guest") connect(); });
-      peer.on("connection", c => { if (role === "host") attach(c); });
-      peer.on("disconnected", () => { if (!closed) { try { peer.reconnect(); } catch (e) {} } });
-      peer.on("error", e => {
-        const t = e && e.type;
-        if (t === "peer-unavailable") later(connect, 2500);          // host not there yet: keep trying
-        else if (t === "unavailable-id") later(makePeer, 3000);      // host reloaded: old id still releasing
-        else if (["network", "server-error", "socket-error", "socket-closed"].includes(t)) later(makePeer, 3000);
-      });
+      const msg = JSON.stringify({ p: mine, ts: Date.now(), from: sender });
+      clients.forEach(c => { if (c.connected) c.publish(myTopic, msg, { qos: 0, retain: true }); });
     }
+    function publishSoon() { if (!pubT) pubT = setTimeout(publishNow, 60); }
 
-    makePeer();
-    hb = setInterval(() => {
-      if (conn && conn.open) {
-        try { conn.send({ t: "ping" }); } catch (e) {}
-        if (lastSeen && Date.now() - lastSeen > 15000) { try { conn.close(); } catch (e) {} }   // stale link
-      } else if (role === "guest") connect();
-      emitPeers();
-    }, 4000);
+    const beat = setInterval(() => { publishNow(); emitPeers(); }, BEAT_MS);
+    setTimeout(() => { if (!anyConnected && !closed && onTrouble) onTrouble(); }, 12000);
 
     return Promise.resolve({
       presence: async patch => {
         for (const k in patch) { if (patch[k] === null) delete mine[k]; else mine[k] = patch[k]; }
-        sendState();
+        publishSoon();
       },
       onPeers: h => { handlers.push(h); setTimeout(emitPeers, 0); return () => { handlers = handlers.filter(x => x !== h); }; },
       onConnection: h => { connHandlers.push(h); setTimeout(() => h(online()), 0); return () => { connHandlers = connHandlers.filter(x => x !== h); }; },
       leave: async () => {
-        closed = true; clearInterval(hb); clearTimeout(retryT);
-        try { if (conn) conn.close(); } catch (e) {}
-        try { if (peer) peer.destroy(); } catch (e) {}
+        closed = true; clearInterval(beat); clearTimeout(pubT);
+        clients.forEach(c => {
+          try { if (c.connected) c.publish(myTopic, "", { qos: 0, retain: true }); } catch (e) {}   // clear my retained state
+          try { c.end(false); } catch (e) {}
+        });
       }
     });
   }
@@ -802,7 +795,7 @@
     setNotice("");
     store(STORE + "-nick", myName());
     try {
-      named = await joinNet(code, role);
+      named = await joinNet(code, role, () => toast("Can't reach the game servers. Check your internet connection.", 4000));
     } catch (e) {
       busyJoin = false;
       setNotice("Couldn't load the online connection. Check your internet and reload the page.");
