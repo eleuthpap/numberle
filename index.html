@@ -128,6 +128,36 @@
   .resume-mini { flex: none; max-width: 120px; overflow: hidden; transition: max-width 0.2s ease, opacity 0.2s ease, margin 0.2s ease; }
   .resume-mini .btn { height: 100%; padding: 0 16px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 0.92rem; line-height: 1.2; }
   .resume-mini small { font-family: var(--font-digit); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; opacity: 0.85; }
+  /* games waiting on the same Wi-Fi */
+  .nearby { display: flex; flex-direction: column; gap: 6px; }
+  .nearby[hidden] { display: none; }
+  .nearby-btn {
+    display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+    padding: 11px 12px 11px 14px; border-radius: 14px; color: var(--fg); font: inherit;
+    background: color-mix(in srgb, var(--hit) 12%, var(--panel));
+    border: 1.5px solid color-mix(in srgb, var(--hit) 45%, transparent);
+  }
+  .nearby-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--hit); box-shadow: 0 0 0 0 color-mix(in srgb, var(--hit) 60%, transparent); animation: ping 1.8s infinite; }
+  @keyframes ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--hit) 55%, transparent); } 80%, 100% { box-shadow: 0 0 0 9px transparent; } }
+  .nearby-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .nearby-text b { font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nearby-text small { font-size: 0.74rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nearby-act { flex: none; font-weight: 600; font-size: 0.88rem; color: var(--on-color); background: var(--hit); border-radius: 10px; padding: 7px 12px; }
+  .nearby-menu { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--panel); }
+  .nearby-menu[hidden] { display: none; }
+  .nearby-item { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border: none; border-top: 1px solid var(--line); background: none; color: var(--fg); font: inherit; text-align: left; }
+  .nearby-item:first-child { border-top: none; }
+  .nearby-item:hover { background: var(--soft); }
+  .nearby-item b { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.95rem; }
+  .nearby-item code { font-family: var(--font-digit); font-size: 0.78rem; letter-spacing: 0.12em; color: var(--muted); }
+  .nearby-item span { font-weight: 600; font-size: 0.85rem; color: var(--hit); }
+  .lan-toggle { display: flex; align-items: center; gap: 10px; width: 100%; padding-top: 12px; border-top: 1px solid var(--line); cursor: pointer; }
+  .lan-toggle[hidden] { display: none; }
+  .lan-toggle input { width: 20px; height: 20px; flex: none; accent-color: var(--hit); }
+  .lan-toggle span { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .lan-toggle b { font-size: 0.92rem; }
+  .lan-toggle small { font-size: 0.74rem; color: var(--muted); }
+  @media (prefers-reduced-motion: reduce) { .nearby-dot { animation: none; } }
   .join-row:has(.join-box:focus-within) .resume-mini { max-width: 0; opacity: 0; margin-left: -8px; pointer-events: none; }
   .join-box { display: flex; border: 1.5px solid var(--line-strong); border-radius: 14px; overflow: hidden; background: var(--panel); }
   .join-box:focus-within { border-color: var(--hit); }
@@ -388,6 +418,15 @@
         </div>
       </div>
 
+      <div class="nearby" id="nearby" hidden>
+        <button class="nearby-btn" id="nearbyBtn" type="button" aria-expanded="false">
+          <span class="nearby-dot" aria-hidden="true"></span>
+          <span class="nearby-text"><b id="nearbyTitle"></b><small id="nearbySub"></small></span>
+          <span class="nearby-act" id="nearbyAct">Join</span>
+        </button>
+        <div class="nearby-menu" id="nearbyMenu" hidden></div>
+      </div>
+
       <div class="or"><span>or</span></div>
 
       <button class="btn outline big" id="soloBtn"><b>Play solo</b><small id="soloSub">Crack a random number in 10 guesses</small></button>
@@ -401,6 +440,10 @@
       <h2>Your game code</h2>
       <div class="code-big" id="lobbyCode">-----</div>
       <button class="btn primary" id="copyBtn">Send invite link</button>
+      <label class="lan-toggle" for="lanVisible" id="lanToggle" hidden>
+        <input type="checkbox" id="lanVisible" checked>
+        <span><b>Show on this Wi-Fi</b><small id="lanNote">People on the same Wi-Fi can see and join this game</small></span>
+      </label>
     </div>
     <p class="hint">Send your friend the invite link, or tell them the code. The game starts as soon as they join. Keep this page open.</p>
     <p class="hint"><span class="dots" id="lobbyWait">Waiting for your friend</span></p>
@@ -494,6 +537,7 @@
     <p><b>Green</b>: right digit, right spot. <b>Yellow</b>: the digit is in the number, in another spot. <b>Gray</b>: not in the number (or not that many times).</p>
     <p><b>4.</b> First to crack the other's number wins. If you crack it first in a round, the other player still gets that round's turn to tie.</p>
     <p><b>Emoji:</b> swipe the emoji strip above the keypad and tap one to send it. Hold an emoji to keep sending until you let go.</p>
+    <p><b>Same Wi-Fi:</b> games waiting for a player on your Wi-Fi show up on the home screen, so you can join without a code. Untick <b>Show on this Wi-Fi</b> after creating a game to keep it private.</p>
     <p><b>Solo:</b> tap <b>Play solo</b> to crack a random number on your own. You get 10 guesses.</p>
     <p>For two-player games, keep the page open while you play. Both phones need internet, on any network.</p>
     <h3 class="settings-h">Settings</h3>
@@ -1025,9 +1069,130 @@
     layer.appendChild(s);
   }
 
+  // ---------- games waiting on the same Wi-Fi ----------
+  // A web page cannot scan the local network, so "same Wi-Fi" means "same internet connection":
+  // phones behind one router share a public IPv4 address. Each phone hashes that address into a
+  // network key; hosts waiting for a player announce their game under that key, and every phone
+  // on the home screen lists what is announced there. Off on mobile data, where strangers share
+  // addresses too.
+  const LAN = { key: null, clients: [], games: new Map(), beat: null, announced: null, visible: load(STORE + "-lanvis", true), menuOpen: false };
+  const LAN_FRESH_MS = 15000;
+
+  function onCellular() {
+    const c = navigator.connection;
+    return !!(c && (c.type === "cellular" || c.type === "none"));
+  }
+
+  async function publicIPv4() {
+    const tries = [
+      async () => (await (await fetch("https://api.ipify.org?format=json", { cache: "no-store" })).json()).ip,
+      async () => (await (await fetch("https://ipv4.icanhazip.com/", { cache: "no-store" })).text()).trim()
+    ];
+    for (const t of tries) {
+      try { const ip = await t(); if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) return ip; } catch (e) {}
+    }
+    return null;
+  }
+
+  async function lanStart() {
+    if (LAN.key || !window.mqtt || onCellular()) return;
+    const ip = await publicIPv4();
+    if (!ip || onCellular()) return;
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("numberle-lan-v1:" + ip));
+    LAN.key = [...new Uint8Array(digest)].slice(0, 10).map(b => b.toString(16).padStart(2, "0")).join("");
+    const filter = "numberle/v2/lan/" + LAN.key + "/+";
+    LAN.clients = BROKERS.map(url => {
+      const c = window.mqtt.connect(url, {
+        clientId: "nl-lan-" + myId + "-" + Math.random().toString(36).slice(2, 6),
+        clean: true, keepalive: 30, reconnectPeriod: 5000, connectTimeout: 10000
+      });
+      c.on("connect", () => { c.subscribe(filter, { qos: 0 }); lanSync(true); });
+      c.on("message", (topic, payload) => {
+        const code = topic.split("/").pop();
+        if (!/^[a-z0-9]{5}$/.test(code)) return;
+        if (!payload.length) { LAN.games.delete(code); renderNearby(); return; }
+        let m; try { m = JSON.parse(payload.toString()); } catch (e) { return; }
+        if (!m || m.code !== code || typeof m.ts !== "number" || m.id === myId) return;
+        if (Date.now() - m.ts > LAN_FRESH_MS * 2) return;            // left over from a game that ended long ago
+        LAN.games.set(code, { name: typeof m.name === "string" && m.name.trim() ? m.name.slice(0, 16) : "Someone", seen: Date.now() });
+        renderNearby();
+      });
+      c.on("error", () => {});
+      return c;
+    });
+    setInterval(() => {                                               // forget games whose host went quiet
+      let changed = false;
+      for (const [code, g] of LAN.games) if (Date.now() - g.seen > LAN_FRESH_MS) { LAN.games.delete(code); changed = true; }
+      if (changed) renderNearby();
+    }, 3000);
+    if (navigator.connection && navigator.connection.addEventListener) {
+      navigator.connection.addEventListener("change", () => { if (onCellular()) { lanSync(); LAN.games.clear(); renderNearby(); } });
+    }
+    render();
+  }
+
+  // Announce my game while I'm the host waiting in the lobby and the game is visible; otherwise withdraw it.
+  function lanSync(force) {
+    const want = LAN.key && !onCellular() && LAN.visible && S && S.role === "host" && !solo && derive().phase === "lobby" ? S.code : null;
+    if (want === LAN.announced && !force) return;
+    if (LAN.announced && LAN.announced !== want) lanPublish(LAN.announced, "");
+    clearInterval(LAN.beat); LAN.beat = null;
+    LAN.announced = want;
+    if (want) {
+      const send = () => lanPublish(want, JSON.stringify({ code: want, name: myName(), ts: Date.now(), id: myId }));
+      send(); LAN.beat = setInterval(send, 4000);
+    }
+  }
+  function lanPublish(code, body) {
+    LAN.clients.forEach(c => { if (c.connected) c.publish("numberle/v2/lan/" + LAN.key + "/" + code, body, { qos: 0, retain: true }); });
+  }
+
+  function nearbyGames() {
+    const mine = S ? S.code : null;
+    return [...LAN.games.entries()].filter(([code]) => code !== mine).map(([code, g]) => ({ code, name: g.name, seen: g.seen })).sort((a, b) => b.seen - a.seen);
+  }
+
+  function renderNearby() {
+    const list = (!S && !solo && !onCellular()) ? nearbyGames() : [];
+    const box = $("nearby"), btn = $("nearbyBtn"), menu = $("nearbyMenu");
+    box.hidden = list.length === 0;
+    if (!list.length) { LAN.menuOpen = false; menu.hidden = true; return; }
+    if (list.length === 1) {
+      LAN.menuOpen = false;
+      $("nearbyTitle").textContent = list[0].name + " is waiting for a player";
+      $("nearbySub").textContent = "On your Wi-Fi · Game " + list[0].code.toUpperCase();
+      $("nearbyAct").textContent = "Join";
+    } else {
+      $("nearbyTitle").textContent = list.length + " games on your Wi-Fi";
+      $("nearbySub").textContent = list.map(g => g.name).join(", ");
+      $("nearbyAct").textContent = LAN.menuOpen ? "Close" : "Choose ▾";
+    }
+    btn.setAttribute("aria-expanded", list.length > 1 && LAN.menuOpen ? "true" : "false");
+    menu.hidden = !(list.length > 1 && LAN.menuOpen);
+    menu.replaceChildren(...list.map(g => {
+      const it = document.createElement("button");
+      it.type = "button"; it.className = "nearby-item"; it.dataset.code = g.code;
+      const b = document.createElement("b"); b.textContent = g.name;
+      const c = document.createElement("code"); c.textContent = g.code.toUpperCase();
+      const s = document.createElement("span"); s.textContent = "Join";
+      it.append(b, c, s);
+      return it;
+    }));
+  }
+
+  function joinNearby(code) {
+    LAN.menuOpen = false;
+    $("joinCode").value = code.toUpperCase();
+    enterGame(code, "guest", null);
+  }
+
   function render() {
     renderMain();
     $("emojiBar").hidden = !(canEmoji() && !$("scDuel").hidden);
+    $("lanToggle").hidden = !(LAN.key && !onCellular() && S && S.role === "host");
+    $("lanVisible").checked = LAN.visible;
+    lanSync();
+    renderNearby();
   }
 
   function renderMain() {
@@ -1251,6 +1416,20 @@
     enterGame(code, "guest", null);
   };
   $("joinCode").addEventListener("keydown", e => { if (e.key === "Enter") $("joinBtn").click(); });
+  $("nearbyBtn").onclick = () => {
+    const list = nearbyGames();
+    if (list.length === 1) joinNearby(list[0].code);
+    else if (list.length > 1) { LAN.menuOpen = !LAN.menuOpen; renderNearby(); }
+  };
+  $("nearbyMenu").addEventListener("click", e => {
+    const it = e.target.closest(".nearby-item");
+    if (it) joinNearby(it.dataset.code);
+  });
+  $("lanVisible").addEventListener("change", () => {
+    LAN.visible = $("lanVisible").checked; store(STORE + "-lanvis", LAN.visible);
+    $("lanNote").textContent = LAN.visible ? "People on the same Wi-Fi can see and join this game" : "Private: only people with the code can join";
+    render();
+  });
   $("resumeBtn").onclick = () => {
     const saved = load(STORE + "-game", null);
     if (saved && saved.code) enterGame(saved.code, saved.role, saved);
@@ -1316,7 +1495,10 @@
     }
   } catch (e) {}
 
+  $("lanNote").textContent = LAN.visible ? "People on the same Wi-Fi can see and join this game" : "Private: only people with the code can join";
   render();
+  lanStart();
+  window.addEventListener("pagehide", () => { if (LAN.announced) lanPublish(LAN.announced, ""); });
   if (!load(STORE + "-seen", false)) { store(STORE + "-seen", true); $("helpModal").classList.add("open"); }
 })();
 </script>
