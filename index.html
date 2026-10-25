@@ -8,6 +8,7 @@
 <meta property="og:title" content="Numberle">
 <meta property="og:description" content="Pick a secret number. Race your friend to crack theirs.">
 <meta name="theme-color" content="#3f9a5b">
+<script>try { var t = (JSON.parse(localStorage.getItem("numberle-duel-v1-prefs")) || {}).theme; if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); } catch (e) {}</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%233f9a5b'/%3E%3Ctext x='16' y='23' font-family='monospace' font-weight='bold' font-size='20' text-anchor='middle' fill='white'%3E7%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -45,6 +46,7 @@
       --key-hit: #2a6a3d; --key-near: #8a6a16; --key-miss: #202125; --key-miss-fg: #7b7e86;
     }
   }
+  :root[data-theme="light"] { color-scheme: light; }
   :root[data-theme="dark"] {
     --bg: #131417; --fg: #f2f2f4; --muted: #9a9ca4; --line: #34363c; --line-strong: #5d6068;
     --key: #4a4c53; --key-fg: #f2f2f4; --hit: #3d8a52; --near: #b8912a; --miss: #3a3c42;
@@ -226,10 +228,16 @@
   .qr-tile.loading { background: linear-gradient(100deg, #f1f2f4 30%, #fafafa 50%, #f1f2f4 70%) 0 0 / 300% 100%; animation: shimmer 1.2s linear infinite; }
   @keyframes shimmer { to { background-position: -150% 0; } }
   .qr-wrap small { color: var(--muted); font-size: 0.78rem; }
+  .net-badge {
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px 5px 9px; border-radius: 999px;
+    font-size: 0.78rem; font-weight: 600; color: var(--hit);
+    background: color-mix(in srgb, var(--hit) 13%, transparent); border: 1px solid color-mix(in srgb, var(--hit) 35%, transparent);
+  }
+  .net-badge[hidden] { display: none; }
+  .net-badge svg { width: 15px; height: 15px; }
   .hero { gap: 12px; margin-bottom: 24px; }
-  .hero-tiles .tile { width: 54px; font-size: 1.9rem; border-radius: 8px; animation: flip 0.6s ease both; }
-  .hero-tiles .tile:nth-child(2) { animation-delay: 0.12s; } .hero-tiles .tile:nth-child(3) { animation-delay: 0.24s; }
-  .hero-tiles .tile:nth-child(4) { animation-delay: 0.36s; } .hero-tiles .tile:nth-child(5) { animation-delay: 0.48s; }
+  .hero-tiles .tile { width: 54px; font-size: 1.9rem; border-radius: 8px; transform-origin: 50% 50%; }
+  .hero-tiles .tile.hidden-digit { border-color: var(--line-strong); }
   .hero p { font-size: 1rem; max-width: 26ch; }
   .resume-line .btn { padding: 8px 14px; font-size: 0.9rem; }
   .card {
@@ -310,10 +318,11 @@
   }
   :root[data-cb] .tile.correct::after, :root[data-cb] .key.correct::after { content: "\2713"; }
   :root[data-cb] .tile.present::after, :root[data-cb] .key.present::after { content: "\2194"; }
-  .settings-h { margin: 18px 0 4px; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-  .setting { display: flex; align-items: center; gap: 10px; margin: 10px 0; font-size: 0.95rem; }
-  .setting input { width: 20px; height: 20px; accent-color: var(--hit); flex: none; }
-  .setting small { margin-left: auto; color: var(--muted); font-size: 0.75rem; text-align: right; }
+  /* small guess tiles: no room in the corner, so the symbol sits under the digit */
+  :root[data-cb] .grid .tile.correct, :root[data-cb] .grid .tile.present { flex-direction: column; line-height: 1; gap: 0.08em; }
+  :root[data-cb] .grid .tile.correct::after, :root[data-cb] .grid .tile.present::after {
+    position: static; font-size: 0.5em; line-height: 1; margin-bottom: -0.15em;
+  }
   .row.peek {
     max-height: 14px; overflow: hidden; opacity: 0.55; pointer-events: none;
     -webkit-mask-image: linear-gradient(#000, transparent); mask-image: linear-gradient(#000, transparent);
@@ -448,8 +457,41 @@
   .panel h2 { margin: 0 0 12px; text-align: center; font-size: 1.1rem; letter-spacing: 0.06em; text-transform: uppercase; }
   .panel .close { position: absolute; top: 6px; right: 6px; }
   .panel p { line-height: 1.5; margin: 8px 0; font-size: 0.95rem; }
-  .example { display: grid; grid-template-columns: repeat(5, 36px); gap: 4px; margin: 6px 0; }
-  .example .tile { font-size: 1.15rem; }
+  .example-box { margin: 8px 0; padding: 16px 14px 6px; border-radius: 12px; background: var(--soft); border: 1px solid var(--line); }
+  .example { display: grid; grid-template-columns: repeat(5, 48px); gap: 6px; justify-content: center; }
+  .example .tile { font-size: 1.55rem; border-radius: 7px; }
+
+  /* same look as the How to play title and text */
+  .settings-h { margin: 26px 0 10px; text-align: center; font-size: 1.1rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg); }
+  .settings { border-top: 1px solid var(--line); }
+  .setting { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 0.95rem; line-height: 1.5; }
+  .setting[hidden] { display: none; }
+  .set-text { flex: 1; min-width: 0; display: flex; flex-direction: column; font-weight: 800; }
+  .set-text small { color: var(--muted); font-size: 0.85rem; font-weight: 400; }
+  /* square switch, same corners as the tiles */
+  .switch {
+    -webkit-appearance: none; appearance: none; flex: none; margin: 0; cursor: pointer; position: relative;
+    width: 42px; height: 24px; border-radius: 6px; border: 2px solid var(--line-strong); background: transparent;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .switch::before {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 3px;
+    background: var(--line-strong); transition: transform 0.15s ease, background 0.15s;
+  }
+  .switch:checked { background: var(--hit); border-color: var(--hit); }
+  .switch:checked::before { transform: translateX(18px); background: var(--on-color); }
+  .switch:focus-visible { outline: 3px solid var(--near); outline-offset: 2px; }
+  .theme-row { cursor: default; }
+  /* three square buttons, same corners as the tiles */
+  .seg { display: flex; flex: none; border: 2px solid var(--line-strong); border-radius: 6px; overflow: hidden; }
+  .seg button {
+    border: none; background: none; color: var(--fg); font: inherit; font-size: 0.85rem; font-weight: 600;
+    padding: 5px 10px; min-width: 52px; line-height: 1.2;
+  }
+  .seg button + button { border-left: 2px solid var(--line-strong); }
+  .seg button[aria-checked="true"] { background: var(--hit); color: var(--on-color); }
+  .seg button:focus-visible { outline: 3px solid var(--near); outline-offset: -3px; }
+  @media (prefers-reduced-motion: reduce) { .switch, .switch::before { transition: none; } }
 
   @media (max-height: 680px) { .key { height: 46px; } .grid { gap: 3px; } }
   @media (prefers-reduced-motion: reduce) {
@@ -474,7 +516,7 @@
   <section class="screen center" id="scHome">
     <div class="hero">
       <div class="hero-tiles" aria-hidden="true">
-        <div class="tile correct">4</div><div class="tile present">0</div><div class="tile absent">7</div><div class="tile correct">1</div><div class="tile">9</div>
+        <div class="tile"></div><div class="tile"></div><div class="tile"></div><div class="tile"></div><div class="tile"></div>
       </div>
       <p>Guess your friend's secret number before they guess yours.</p>
     </div>
@@ -485,7 +527,7 @@
         <input class="name-input" id="nick" maxlength="16" placeholder="your name" aria-label="Your name" autocomplete="nickname">
       </label>
 
-      <button class="btn primary big" id="createBtn"><b>Create game</b><small>Get a code to share with a friend</small></button>
+      <button class="btn primary big" id="createBtn"><b>Create game</b><small id="createSub">Get a code to share with a friend</small></button>
 
       <div class="join-row">
         <div class="join-box">
@@ -526,6 +568,7 @@
   <section class="screen center" id="scLobby" hidden>
     <div class="card" style="align-items:center">
       <h2>Your game code</h2>
+      <span class="net-badge" id="netBadge" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1" fill="currentColor"/></svg>Local game · phones connect directly</span>
       <div class="code-big" id="lobbyCode">-----</div>
       <div class="qr-wrap" id="qrWrap" hidden>
         <div class="qr-tile loading" id="qrTile" role="img" aria-label="QR code to join this game"></div>
@@ -537,7 +580,7 @@
         <span><b>Show on this Wi-Fi</b><small id="lanNote">People on the same Wi-Fi can see and join this game</small></span>
       </label>
     </div>
-    <p class="hint">Let your friend scan the QR, send them the invite link, or just tell them the code. The game starts as soon as they join. Keep this page open.</p>
+    <p class="hint" id="lobbyHint">Let your friend scan the QR, send them the invite link, or just tell them the code. The game starts as soon as they join. Keep this page open.</p>
     <p class="hint"><span class="dots" id="lobbyWait">Waiting for your friend</span></p>
   </section>
 
@@ -618,27 +661,32 @@
 <div id="toast" role="status" aria-live="polite"></div>
 
 <div class="overlay" id="helpModal">
-  <div class="panel">
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
     <button class="icon-btn close" data-close aria-label="Close">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>
-    <h2>How to play</h2>
+    <h2 id="helpTitle">How to play</h2>
     <p><b>1.</b> One player taps <b>Create game</b> and shares the code. The other enters it and taps <b>Join</b>.</p>
     <p><b>2.</b> Each of you picks a secret 5-digit number. Digits can repeat, and it can start with 0.</p>
     <p><b>3.</b> Take turns guessing. Who goes first is picked at random, then you alternate. You each get up to 8 guesses.</p>
-    <div class="example"><div class="tile correct">4</div><div class="tile present">3</div><div class="tile absent">7</div><div class="tile absent">0</div><div class="tile absent">1</div></div>
-    <p><b>Green</b>: right digit, right spot. <b>Yellow</b>: the digit is in the number, in another spot. <b>Gray</b>: not in the number (or not that many times).</p>
+    <div class="example-box">
+      <div class="example"><div class="tile correct">4</div><div class="tile present">3</div><div class="tile absent">7</div><div class="tile absent">0</div><div class="tile absent">1</div></div>
+      <p><b>Green</b>: right digit, right spot. <b>Yellow</b>: the digit is in the number, in another spot. <b>Gray</b>: not in the number (or not that many times).</p>
+    </div>
     <p><b>4.</b> First to crack the other's number wins. If you crack it first in a round, the other player still gets that round's turn to tie.</p>
-    <p><b>Emoji:</b> swipe the emoji strip above the keypad and tap one to send it. Hold an emoji to keep sending until you let go.</p>
-    <p><b>Same Wi-Fi:</b> games waiting for a player on your Wi-Fi show up on the home screen, so you can join without a code. Untick <b>Show on this Wi-Fi</b> after creating a game to keep it private.</p>
-    <p><b>Scan to join:</b> the new game screen shows a QR code. On the other phone, tap <b>Scan</b> next to the code box and point the camera at it. A normal phone camera works too. On a computer, type the code instead.</p>
-    <p><b>Pull down to refresh:</b> on the home screen it reloads the page and the list of nearby games. During an online game it re-syncs with your friend's phone without leaving the game.</p>
-    <p><b>Solo:</b> tap <b>Play solo</b> to crack a random number on your own. You get 10 guesses.</p>
-    <p>For two-player games, keep the page open while you play. Both phones need internet, on any network.</p>
+
     <h3 class="settings-h">Settings</h3>
-    <label class="setting"><input type="checkbox" id="optCb"><span>Colorblind mode</span><small>symbols, blue and orange</small></label>
-    <label class="setting"><input type="checkbox" id="optHaptics"><span>Vibration</span></label>
-    <label class="setting"><input type="checkbox" id="optSound"><span>Sound</span></label>
+    <div class="settings">
+      <div class="setting theme-row"><span class="set-text" id="themeLabel">Theme</span>
+        <div class="seg" role="radiogroup" aria-labelledby="themeLabel">
+          <button type="button" role="radio" data-theme-opt="auto">Auto</button><button type="button" role="radio" data-theme-opt="light">Light</button><button type="button" role="radio" data-theme-opt="dark">Dark</button>
+        </div>
+      </div>
+      <label class="setting"><span class="set-text">Colorblind mode<small>blue and orange, with symbols</small></span><input type="checkbox" class="switch" id="optCb"></label>
+      <label class="setting" id="rowHaptics"><span class="set-text">Vibration</span><input type="checkbox" class="switch" id="optHaptics"></label>
+      <label class="setting"><span class="set-text">Sound</span><input type="checkbox" class="switch" id="optSound"></label>
+      <label class="setting"><span class="set-text">Local only<small>new games connect phones directly</small></span><input type="checkbox" class="switch" id="optLocal"></label>
+    </div>
   </div>
 </div>
 
@@ -656,7 +704,15 @@
   function unstore(k) { try { localStorage.removeItem(k); } catch (e) {} }
 
   function rand(n) { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; }
-  function makeCode() { let s = ""; for (let i = 0; i < 5; i++) s += ALPHA[rand(ALPHA.length)]; return s; }
+  // The first character tells the other phone how to connect: a digit means a local (direct) game,
+  // a letter means the usual online game. Nobody has to know this; it just makes typed codes work.
+  const LETTERS = ALPHA.replace(/[0-9]/g, ""), DIGITS = ALPHA.replace(/[a-z]/g, "");
+  function makeCode(local) {
+    let s = local ? DIGITS[rand(DIGITS.length)] : LETTERS[rand(LETTERS.length)];
+    for (let i = 1; i < 5; i++) s += ALPHA[rand(ALPHA.length)];
+    return s;
+  }
+  const isLocalCode = code => /^[0-9]/.test(code);
   function makeId() { let s = ""; for (let i = 0; i < 12; i++) s += ALPHA[rand(ALPHA.length)]; return s; }
 
   const myId = load(STORE + "-id", null) || (() => { const id = makeId(); store(STORE + "-id", id); return id; })();
@@ -689,8 +745,14 @@
 
   // ---------- preferences, haptics, sound ----------
   const PREFS_KEY = STORE + "-prefs";
-  const prefs = Object.assign({ cb: false, haptics: true, sound: false }, load(PREFS_KEY, {}));
-  function applyPrefs() { document.documentElement.toggleAttribute("data-cb", !!prefs.cb); }
+  const prefs = Object.assign({ cb: false, haptics: true, sound: false, local: false, theme: "auto" }, load(PREFS_KEY, {}));
+  function applyPrefs() {
+    const root = document.documentElement;
+    root.toggleAttribute("data-cb", !!prefs.cb);
+    if (prefs.theme === "light" || prefs.theme === "dark") root.setAttribute("data-theme", prefs.theme);
+    else root.removeAttribute("data-theme");
+    document.querySelectorAll("[data-theme-opt]").forEach(b => b.setAttribute("aria-checked", String(b.dataset.themeOpt === (prefs.theme || "auto"))));
+  }
   let actx = null;
   function beep(freq, start, dur, vol, type) {
     if (!actx) return;
@@ -826,6 +888,100 @@
     });
   }
 
+  // ---------- local only: a direct phone-to-phone connection (PeerJS / WebRTC) ----------
+  // Same shape as joinNet, so the game doesn't care which one it got. PeerJS's free server only
+  // introduces the two phones; after that every move goes straight from one phone to the other.
+  // There is no relay (TURN) server, so if the phones can't reach each other directly they won't connect.
+  const PEERJS_URL = "https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js";
+  const PEER_OPTS = Object.assign({ debug: 0, config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] } }, window.NUMBERLE_PEER || {});
+
+  async function joinPeer(code, role, onTrouble) {
+    if (!window.Peer) await loadScript(PEERJS_URL);
+    if (!window.Peer) throw { code: "no_peer" };
+    const hostId = "numberle-v2-" + code + "-host";
+    let mine = {}, remote = null, remoteTs = 0, lastHeard = 0, closed = false;
+    let handlers = [], connHandlers = [], wasOnline = false, pubT = null, retryT = null;
+    let peer = null, conn = null, serverOk = false;
+
+    const linked = () => !!conn && conn.open;
+    const online = () => linked() && !!remote && Date.now() - lastHeard < STALE_MS;
+    const emitPeers = () => {
+      const on = online();
+      const peers = on ? [{ sameTab: false, presence: remote }] : [];
+      handlers.forEach(h => { try { h({ peers }); } catch (e) {} });
+      if (on !== wasOnline) { wasOnline = on; connHandlers.forEach(h => { try { h(on); } catch (e) {} }); }
+    };
+
+    function attach(c) {
+      if (conn && conn !== c) { try { conn.close(); } catch (e) {} }
+      conn = c;
+      c.on("open", () => { if (conn === c) { sendNow(); emitPeers(); } });
+      c.on("data", d => {
+        if (conn !== c) return;
+        let m = d; if (typeof m === "string") { try { m = JSON.parse(m); } catch (e) { return; } }
+        if (!m || typeof m !== "object" || !m.p || typeof m.p !== "object" || typeof m.ts !== "number") return;
+        if (m.ts < remoteTs) return;
+        remoteTs = m.ts; remote = m.p; lastHeard = Date.now();
+        emitPeers();
+      });
+      c.on("close", () => { if (conn === c) { conn = null; emitPeers(); if (role === "guest") retry(1500); } });
+      c.on("error", () => {});
+    }
+    function retry(ms) { clearTimeout(retryT); retryT = closed ? null : setTimeout(() => { retryT = null; connect(); }, ms); }
+    function connect() {                                   // guest -> host
+      if (closed || role !== "guest" || !peer || peer.destroyed || linked()) return;
+      if (peer.disconnected) { try { peer.reconnect(); } catch (e) {} retry(2500); return; }
+      if (!peer.open) { retry(1000); return; }
+      const c = peer.connect(hostId, { reliable: true, serialization: "json" });
+      attach(c);
+      setTimeout(() => { if (conn === c && !c.open) { try { c.close(); } catch (e) {} conn = null; retry(500); } }, 9000);
+    }
+    function makePeer() {
+      if (closed) return;
+      peer = role === "host" ? new window.Peer(hostId, PEER_OPTS) : new window.Peer(PEER_OPTS);
+      peer.on("open", () => { serverOk = true; if (role === "guest") connect(); });
+      peer.on("connection", c => { if (role === "host" && !closed) attach(c); else { try { c.close(); } catch (e) {} } });
+      peer.on("disconnected", () => { if (!closed) setTimeout(() => { try { if (!peer.destroyed && peer.disconnected) peer.reconnect(); } catch (e) {} }, 2000); });
+      peer.on("error", e => {
+        if (closed) return;
+        const t = e && e.type;
+        if (t === "unavailable-id") { try { peer.destroy(); } catch (x) {} setTimeout(makePeer, 3000); }   // my old tab still holds the game for a moment
+        else if (t === "peer-unavailable") { if (conn && !conn.open) conn = null; retry(2500); }    // the host isn't there (yet)
+        else if (t === "browser-incompatible") { if (onTrouble) onTrouble(); }
+      });
+    }
+    function sendNow() {
+      clearTimeout(pubT); pubT = null;
+      if (closed || !linked()) return;
+      try { conn.send({ p: mine, ts: Date.now() }); } catch (e) {}
+    }
+    function sendSoon() { if (!pubT) pubT = setTimeout(sendNow, 60); }
+
+    makePeer();
+    const beat = setInterval(() => { sendNow(); emitPeers(); if (role === "guest" && !linked() && !retryT) connect(); }, BEAT_MS);
+    setTimeout(() => { if (!serverOk && !closed && onTrouble) onTrouble(); }, 12000);
+
+    return {
+      presence: async patch => {
+        for (const k in patch) { if (patch[k] === null) delete mine[k]; else mine[k] = patch[k]; }
+        sendSoon();
+      },
+      onPeers: h => { handlers.push(h); setTimeout(emitPeers, 0); return () => { handlers = handlers.filter(x => x !== h); }; },
+      onConnection: h => { connHandlers.push(h); setTimeout(() => h(online()), 0); return () => { connHandlers = connHandlers.filter(x => x !== h); }; },
+      refresh: () => new Promise(resolve => {
+        if (role === "guest" && !linked()) { clearTimeout(retryT); retryT = null; connect(); }
+        else if (peer && peer.disconnected) { try { peer.reconnect(); } catch (e) {} }
+        sendNow();
+        setTimeout(() => { emitPeers(); resolve(online()); }, 1500);
+      }),
+      leave: async () => {
+        closed = true; clearInterval(beat); clearTimeout(pubT); clearTimeout(retryT);
+        try { if (conn) conn.close(); } catch (e) {}
+        try { if (peer) peer.destroy(); } catch (e) {}
+      }
+    };
+  }
+
   function save() { if (S) store(STORE + "-game", S); }
 
   function newSide(code, role) {
@@ -947,15 +1103,20 @@
     busyJoin = true;
     setNotice("");
     store(STORE + "-nick", myName());
+    const local = resume && resume.net ? resume.net === "p2p" : isLocalCode(code);
     try {
-      named = await joinNet(code, role, () => toast("Can't reach the game servers. Check your internet connection.", 4000));
+      named = await (local ? joinPeer : joinNet)(code, role, () => toast(local
+        ? "Can't reach the other phone yet. Check that you're both online, ideally on the same Wi-Fi."
+        : "Can't reach the game servers. Check your internet connection.", 4000));
     } catch (e) {
       busyJoin = false;
-      setNotice("Couldn't load the online connection. Check your internet and reload the page.");
+      setNotice(local ? "Couldn't start the direct connection. Check your internet and reload the page."
+                      : "Couldn't load the online connection. Check your internet and reload the page.");
       return;
     }
     busyJoin = false;
     S = resume || newSide(code, role);
+    S.net = local ? "p2p" : "mqtt";
     opp = null; oppOnline = false; entry = "";
     oppEmoSeen = null; myEmoList = [];
     prev = { myMarked: 0, oppMarked: 0, myTurn: null, over: false, phase: "" };
@@ -1204,9 +1365,11 @@
   }
 
   async function lanStart() {
-    if (LAN.key || !window.mqtt || onCellular()) return;
+    if (LAN.key || LAN.starting || prefs.local || !window.mqtt || onCellular()) return;
+    LAN.starting = true;
     const ip = await publicIPv4();
-    if (!ip || onCellular()) return;
+    LAN.starting = false;
+    if (!ip || onCellular() || prefs.local) return;
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("numberle-lan-v1:" + ip));
     LAN.key = [...new Uint8Array(digest)].slice(0, 10).map(b => b.toString(16).padStart(2, "0")).join("");
     const filter = "numberle/v2/lan/" + LAN.key + "/+";
@@ -1229,7 +1392,8 @@
       c.on("error", () => {});
       return c;
     });
-    setInterval(() => {                                               // forget games whose host went quiet
+    clearInterval(LAN.prune);
+    LAN.prune = setInterval(() => {                                   // forget games whose host went quiet
       let changed = false;
       for (const [code, g] of LAN.games) if (Date.now() - g.seen > LAN_FRESH_MS) { LAN.games.delete(code); changed = true; }
       if (changed) renderNearby();
@@ -1242,7 +1406,7 @@
 
   // Announce my game while I'm the host waiting in the lobby and the game is visible; otherwise withdraw it.
   function lanSync(force) {
-    const want = LAN.key && !onCellular() && LAN.visible && S && S.role === "host" && !solo && derive().phase === "lobby" ? S.code : null;
+    const want = LAN.key && !prefs.local && !onCellular() && LAN.visible && S && S.role === "host" && S.net !== "p2p" && !solo && derive().phase === "lobby" ? S.code : null;
     if (want === LAN.announced && !force) return;
     if (LAN.announced && LAN.announced !== want) lanPublish(LAN.announced, "");
     clearInterval(LAN.beat); LAN.beat = null;
@@ -1256,13 +1420,22 @@
     LAN.clients.forEach(c => { if (c.connected) c.publish("numberle/v2/lan/" + LAN.key + "/" + code, body, { qos: 0, retain: true }); });
   }
 
+  // Local only: no relay servers at all, so the Wi-Fi list switches off.
+  function lanStop() {
+    if (LAN.announced) lanPublish(LAN.announced, "");
+    clearInterval(LAN.beat); clearInterval(LAN.prune); LAN.beat = LAN.prune = null; LAN.announced = null;
+    LAN.clients.forEach(c => { try { c.end(false); } catch (e) {} });
+    LAN.clients = []; LAN.key = null; LAN.games.clear(); LAN.menuOpen = false;
+    renderNearby();
+  }
+
   function nearbyGames() {
     const mine = S ? S.code : null;
     return [...LAN.games.entries()].filter(([code]) => code !== mine).map(([code, g]) => ({ code, name: g.name, seen: g.seen })).sort((a, b) => b.seen - a.seen);
   }
 
   function renderNearby() {
-    const list = (!S && !solo && !onCellular()) ? nearbyGames() : [];
+    const list = (!S && !solo && !onCellular() && !prefs.local) ? nearbyGames() : [];
     const box = $("nearby"), btn = $("nearbyBtn"), menu = $("nearbyMenu");
     box.hidden = list.length === 0;
     if (!list.length) { LAN.menuOpen = false; menu.hidden = true; return; }
@@ -1298,7 +1471,7 @@
   function render() {
     renderMain();
     $("emojiBar").hidden = !(canEmoji() && !$("scDuel").hidden);
-    $("lanToggle").hidden = !(LAN.key && !onCellular() && S && S.role === "host");
+    $("lanToggle").hidden = !(LAN.key && !prefs.local && !onCellular() && S && S.role === "host" && S.net !== "p2p");
     $("lanVisible").checked = LAN.visible;
     lanSync();
     renderNearby();
@@ -1471,6 +1644,7 @@
 
     if (d.phase === "home") {
       show("scHome"); kb.hidden = true;
+      $("createSub").textContent = prefs.local ? "Local only: the phones connect directly" : "Get a code to share with a friend";
       const bs = load(BEST_KEY, 0);
       $("soloSub").textContent = bs ? "Your best: " + bs + (bs === 1 ? " guess" : " guesses") : "Crack a random number in 10 guesses";
       const saved = load(STORE + "-game", null);
@@ -1484,6 +1658,10 @@
       show("scLobby"); kb.hidden = true;
       $("lobbyCode").textContent = S.code.toUpperCase();
       $("copyBtn").hidden = S.role !== "host";
+      $("netBadge").hidden = S.net !== "p2p";
+      $("lobbyHint").textContent = S.net === "p2p"
+        ? "Let your friend scan the QR, or tell them the code. Local games work best when you're on the same Wi-Fi. Keep this page open."
+        : "Let your friend scan the QR, send them the invite link, or just tell them the code. The game starts as soon as they join. Keep this page open.";
       $("qrWrap").hidden = S.role !== "host" || qrFailed;
       if (S.role === "host" && !qrFailed) renderQR(inviteLink());
       $("lobbyWait").textContent = S.role === "host" ? "Waiting for your friend" : "Waiting for the game's creator";
@@ -1677,7 +1855,7 @@
     if (b && e.detail === 0) sendEmoji(b.dataset.emo);
   });
   $("emojiBar").addEventListener("contextmenu", e => e.preventDefault());
-  $("createBtn").onclick =() => enterGame(makeCode(), "host", null);
+  $("createBtn").onclick = () => enterGame(makeCode(prefs.local), "host", null);
   function joinTyped() {
     const code = $("joinCode").value.toLowerCase().replace(/[^a-z0-9]/g, "");
     if (code.length !== 5) { setNotice("Enter the 5-character code your friend gave you."); return; }
@@ -1749,14 +1927,19 @@
   $("nick").value = load(STORE + "-nick", "") || "";
   $("nick").addEventListener("change", () => { store(STORE + "-nick", myName()); if (S) publish(); });
 
-  [["optCb", "cb"], ["optHaptics", "haptics"], ["optSound", "sound"]].forEach(([id, key]) => {
+  [["optCb", "cb"], ["optHaptics", "haptics"], ["optSound", "sound"], ["optLocal", "local"]].forEach(([id, key]) => {
     $(id).checked = !!prefs[key];
     $(id).addEventListener("change", () => {
       prefs[key] = $(id).checked; store(PREFS_KEY, prefs); applyPrefs();
-      if (key !== "cb" && prefs[key]) fb("submit");
+      if (key === "haptics" && prefs[key]) fb("submit");
+      if (key === "local") { if (prefs.local) lanStop(); else lanStart(); render(); }
     });
   });
+  document.querySelectorAll("[data-theme-opt]").forEach(b => b.addEventListener("click", () => {
+    prefs.theme = b.dataset.themeOpt; store(PREFS_KEY, prefs); applyPrefs();
+  }));
   applyPrefs();
+  $("rowHaptics").hidden = !navigator.vibrate;
 
   // An invite link (?join=CODE) fills in the code for the friend.
   try {
@@ -1830,6 +2013,27 @@
     main.addEventListener("touchcancel", () => { if (armed) reset(); y0 = null; });
   })();
 
+  // ---------- hero ----------
+  // A fresh guess every time: random digits, always 2 green, 1 yellow, 1 gray and 1 plain tile,
+  // revealed one tile at a time like a guess being scored.
+  function heroReveal() {
+    const tiles = [...document.querySelectorAll(".hero-tiles .tile")];
+    const marks = ["correct", "correct", "present", "absent", ""];
+    for (let i = marks.length - 1; i > 0; i--) { const j = rand(i + 1); [marks[i], marks[j]] = [marks[j], marks[i]]; }
+    const show = (t, i) => { t.textContent = String(rand(10)); t.className = "tile" + (marks[i] ? " " + marks[i] : " filled"); };
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches || !tiles[0] || !tiles[0].animate;
+    if (still) { tiles.forEach(show); return; }
+    tiles.forEach(t => { t.textContent = ""; t.className = "tile hidden-digit"; });
+    tiles.forEach((t, i) => setTimeout(() => {
+      const fold = t.animate([{ transform: "rotateX(0)" }, { transform: "rotateX(90deg)" }], { duration: 230, easing: "ease-in", fill: "forwards" });
+      fold.onfinish = () => {
+        show(t, i);
+        t.animate([{ transform: "rotateX(90deg)" }, { transform: "rotateX(0)" }], { duration: 230, easing: "ease-out", fill: "forwards" });
+      };
+    }, 300 + i * 170));
+  }
+
+  heroReveal();
   render();
   detectCamera();
   if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener("devicechange", detectCamera);
