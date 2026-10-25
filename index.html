@@ -159,7 +159,6 @@
   .lan-toggle span { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
   .lan-toggle b { font-size: 0.92rem; }
   .lan-toggle small { font-size: 0.74rem; color: var(--muted); }
-  @media (prefers-reduced-motion: reduce) { .nearby-dot { animation: none; } }
   .join-row:has(.join-box:focus-within) .resume-mini { max-width: 0; opacity: 0; margin-left: -8px; pointer-events: none; }
   .join-box { display: flex; border: 1.5px solid var(--line-strong); border-radius: 14px; overflow: hidden; background: var(--panel); }
   .join-box:focus-within { border-color: var(--hit); }
@@ -215,7 +214,6 @@
   .scan-close svg { width: 20px; height: 20px; }
   .scan-spin { position: absolute; left: 50%; top: 46%; width: 34px; height: 34px; margin: -17px 0 0 -17px; border: 3px solid rgba(255,255,255,0.25); border-top-color: #fff; border-radius: 50%; animation: ptrspin 0.8s linear infinite; }
   .scan-panel:not(.wait) .scan-spin { display: none; }
-  @media (prefers-reduced-motion: reduce) { .scan-line { animation: none; top: 50%; } .scan-panel { animation: none; } }
 
   /* ---------- QR on the new game screen ---------- */
   .qr-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
@@ -318,9 +316,9 @@
   }
   :root[data-cb] .tile.correct::after, :root[data-cb] .key.correct::after { content: "\2713"; }
   :root[data-cb] .tile.present::after, :root[data-cb] .key.present::after { content: "\2194"; }
-  /* small guess tiles: no room in the corner, so the symbol sits under the digit */
-  :root[data-cb] .grid .tile.correct, :root[data-cb] .grid .tile.present { flex-direction: column; line-height: 1; gap: 0.08em; }
-  :root[data-cb] .grid .tile.correct::after, :root[data-cb] .grid .tile.present::after {
+  /* tiles: the symbol sits under the digit (keys keep it in the corner) */
+  :root[data-cb] .tile.correct, :root[data-cb] .tile.present { flex-direction: column; line-height: 1; gap: 0.08em; }
+  :root[data-cb] .tile.correct::after, :root[data-cb] .tile.present::after {
     position: static; font-size: 0.5em; line-height: 1; margin-bottom: -0.15em;
   }
   .row.peek {
@@ -355,7 +353,10 @@
   .grid { display: grid; gap: 4px; }
   .grid .tile { font-size: clamp(0.9rem, 4.6vw, 1.35rem); border-width: 2px; border-radius: 5px; }
   .board.theirs .grid .tile { opacity: 0.95; }
-  .boards.solo { grid-template-columns: minmax(0, 200px); justify-content: center; }
+  .boards.solo { grid-template-columns: minmax(0, 330px); justify-content: center; }
+  .boards.solo .grid { gap: 6px; }
+  .boards.solo .grid .row { gap: 6px; }
+  .boards.solo .grid .tile { font-size: clamp(1.3rem, 7vw, 2rem); border-radius: 7px; }
   .boards.solo .board.theirs { display: none; }
 
   /* result banner */
@@ -413,7 +414,12 @@
     100% { transform: translateY(-62vh) scale(1) rotate(var(--r, 0deg)); opacity: 0; }
   }
   @keyframes fade { 0% { opacity: 0; } 20% { opacity: 1; } 100% { opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) { .fly { animation: fade 1.4s forwards; } }
+  .fly.from { bottom: auto; width: 1em; height: 1em; margin: -0.5em 0 0 -0.5em; text-align: center; animation: flyFrom 1.15s cubic-bezier(.2,.7,.4,1) forwards; }
+  @keyframes flyFrom {
+    0% { transform: translate(0, 0) scale(0.9); opacity: 1; }
+    15% { transform: translate(calc(var(--dx, 0px) * 0.15), -34px) scale(1.35) rotate(var(--r, 0deg)); opacity: 1; }
+    100% { transform: translate(var(--dx, 0px), -52vh) scale(1.1) rotate(var(--r, 0deg)); opacity: 0; }
+  }
 
   #toast {
     position: fixed; top: calc(env(safe-area-inset-top, 0px) + 70px); left: 50%; transform: translateX(-50%);
@@ -438,7 +444,6 @@
   #ptr.busy svg { animation: ptrspin 0.8s linear infinite; }
   #ptr.settle, main.settle { transition: transform 0.25s ease, opacity 0.25s ease; }
   @keyframes ptrspin { to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) { #ptr.busy svg { animation: none; } }
 
   .overlay {
     position: fixed; inset: 0; background: var(--scrim);
@@ -491,12 +496,8 @@
   .seg button + button { border-left: 2px solid var(--line-strong); }
   .seg button[aria-checked="true"] { background: var(--hit); color: var(--on-color); }
   .seg button:focus-visible { outline: 3px solid var(--near); outline-offset: -3px; }
-  @media (prefers-reduced-motion: reduce) { .switch, .switch::before { transition: none; } }
 
   @media (max-height: 680px) { .key { height: 46px; } .grid { gap: 3px; } }
-  @media (prefers-reduced-motion: reduce) {
-    .tile, .row, .key, .dots::after { animation: none !important; transition: none !important; }
-  }
 </style>
 </head>
 <body>
@@ -1198,7 +1199,18 @@
     const myGrid = $("myGrid"); myGrid.replaceChildren();
     for (let r = 0; r < SMAX; r++) {
       if (r < n) myGrid.appendChild(buildRow(solo.guesses[r], solo.marks[r], { animate: r >= prev.myMarked }));
-      else if (r === n && !over) myGrid.appendChild(buildRow(entry, null, { entry: true }));
+      else if (r === n && !over) {
+        myGrid.appendChild(buildRow(entry, null, { entry: true }));
+        if (n !== prev.soloRowShown) {                    // keep the row I'm typing in on screen
+          prev.soloRowShown = n;
+          requestAnimationFrame(() => {                   // the grid may have been redrawn since, so look the row up again
+            const cur = $("myGrid").children[n], kb = $("keyboard"), main = document.querySelector("main");
+            if (!cur || kb.hidden) return;
+            const hidden = cur.getBoundingClientRect().bottom - kb.getBoundingClientRect().top + 10;   // part covered by the keypad
+            if (hidden > 0) main.scrollBy({ top: hidden, behavior: n ? "smooth" : "auto" });
+          });
+        }
+      }
     }
     if (!over && n + 1 < SMAX) myGrid.appendChild(peekRow());
     prev.myMarked = n;
@@ -1300,7 +1312,7 @@
 
   // ---------- emoji ----------
   function canEmoji() { return !!(named && S && opp && oppOnline); }
-  function sendEmoji(e) {
+  function sendEmoji(e, fromBtn) {
     if (!named || !EMO.includes(e)) return;
     const now = Date.now();
     emoTimes = emoTimes.filter(t => now - t < 1000);
@@ -1310,7 +1322,7 @@
     myEmoList.push([myEmoSeq, e]);
     if (myEmoList.length > 12) myEmoList.shift();
     named.presence({ emo: { l: myEmoList } }).catch(() => {});
-    burst(e, true);
+    burst(e, true, fromBtn);
   }
 
   function readEmo(p) {
@@ -1327,14 +1339,22 @@
     oppEmoSeen = Math.max(oppEmoSeen, top);
   }
 
-  function burst(e, mine) {
+  function burst(e, mine, fromBtn) {
     const layer = $("emoLayer");
     while (layer.childElementCount > 40) layer.firstChild.remove();
     const s = document.createElement("span");
     s.className = "fly" + (mine ? " mine" : "");
     s.textContent = e;
-    s.style.left = (mine ? 62 + Math.random() * 28 : 4 + Math.random() * 80) + "%";
     s.style.setProperty("--r", (Math.random() * 40 - 20).toFixed(0) + "deg");
+    const r = fromBtn && fromBtn.isConnected ? fromBtn.getBoundingClientRect() : null;
+    if (r && r.width) {                                   // my emoji lifts off from the button I pressed
+      s.classList.add("from");
+      s.style.left = (r.left + r.width / 2) + "px";
+      s.style.top = (r.top + r.height / 2) + "px";
+      s.style.setProperty("--dx", (Math.random() * 70 - 35).toFixed(0) + "px");
+    } else {
+      s.style.left = (mine ? 62 + Math.random() * 28 : 4 + Math.random() * 80) + "%";
+    }
     s.addEventListener("animationend", () => s.remove());
     layer.appendChild(s);
   }
@@ -1834,15 +1854,15 @@
   function endEmoG(send) {
     if (!emoG) return;
     clearTimeout(emoG.t); clearInterval(emoG.i);
-    if (send && !emoG.held) sendEmoji(emoG.em);
+    if (send && !emoG.held) sendEmoji(emoG.em, emoG.btn);
     emoG = null;
   }
   $("emojiBar").addEventListener("pointerdown", e => {
     const b = e.target.closest(".emo-btn");
     if (!b) return;
     endEmoG(false);
-    const em = b.dataset.emo, g = { em, x: e.clientX, y: e.clientY, held: false, i: null };
-    g.t = setTimeout(() => { g.held = true; sendEmoji(em); g.i = setInterval(() => sendEmoji(em), 130); }, 350);
+    const em = b.dataset.emo, g = { em, btn: b, x: e.clientX, y: e.clientY, held: false, i: null };
+    g.t = setTimeout(() => { g.held = true; sendEmoji(em, b); g.i = setInterval(() => sendEmoji(em, b), 130); }, 350);
     emoG = g;
   });
   $("emojiBar").addEventListener("pointermove", e => {
@@ -1852,7 +1872,7 @@
   window.addEventListener("pointercancel", () => endEmoG(false));
   $("emojiBar").addEventListener("click", e => {   // keyboard activation
     const b = e.target.closest(".emo-btn");
-    if (b && e.detail === 0) sendEmoji(b.dataset.emo);
+    if (b && e.detail === 0) sendEmoji(b.dataset.emo, b);
   });
   $("emojiBar").addEventListener("contextmenu", e => e.preventDefault());
   $("createBtn").onclick = () => enterGame(makeCode(prefs.local), "host", null);
@@ -2014,14 +2034,16 @@
   })();
 
   // ---------- hero ----------
-  // A fresh guess every time: random digits, always 2 green, 1 yellow, 1 gray and 1 plain tile,
+  // A fresh guess every time: random digits, always 2 green, 1 yellow and 2 gray tiles,
   // revealed one tile at a time like a guess being scored.
   function heroReveal() {
     const tiles = [...document.querySelectorAll(".hero-tiles .tile")];
-    const marks = ["correct", "correct", "present", "absent", ""];
+    const marks = ["correct", "correct", "present", "absent", "absent"];
     for (let i = marks.length - 1; i > 0; i--) { const j = rand(i + 1); [marks[i], marks[j]] = [marks[j], marks[i]]; }
-    const show = (t, i) => { t.textContent = String(rand(10)); t.className = "tile" + (marks[i] ? " " + marks[i] : " filled"); };
-    const still = matchMedia("(prefers-reduced-motion: reduce)").matches || !tiles[0] || !tiles[0].animate;
+    const digits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];                 // five different digits, so it never looks contradictory
+    for (let i = digits.length - 1; i > 0; i--) { const j = rand(i + 1); [digits[i], digits[j]] = [digits[j], digits[i]]; }
+    const show = (t, i) => { t.textContent = String(digits[i]); t.className = "tile " + marks[i]; };
+    const still = !tiles[0] || !tiles[0].animate;   // animations always on, even with "Remove animations" (owner's choice)
     if (still) { tiles.forEach(show); return; }
     tiles.forEach(t => { t.textContent = ""; t.className = "tile hidden-digit"; });
     tiles.forEach((t, i) => setTimeout(() => {
