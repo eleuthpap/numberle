@@ -352,6 +352,23 @@
   }
   #toast.show { opacity: 1; }
 
+  /* ---------- pull to refresh ---------- */
+  #ptr {
+    position: fixed; left: 50%; top: 0; z-index: 30;
+    width: 40px; height: 40px; margin-left: -20px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--panel); color: var(--hit);
+    border: 1px solid var(--line); box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    opacity: 0; pointer-events: none;
+    transform: translateY(-48px);
+  }
+  #ptr svg { width: 22px; height: 22px; transition: transform 0.15s; }
+  #ptr.ready svg { transform: rotate(180deg); }
+  #ptr.busy svg { animation: ptrspin 0.8s linear infinite; }
+  #ptr.settle, main.settle { transition: transform 0.25s ease, opacity 0.25s ease; }
+  @keyframes ptrspin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { #ptr.busy svg { animation: none; } }
+
   .overlay {
     position: fixed; inset: 0; background: var(--scrim);
     display: none; align-items: center; justify-content: center; z-index: 20;
@@ -521,6 +538,7 @@
   </div>
 </main>
 
+<div id="ptr" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v14M6 12l6 6 6-6"/></svg></div>
 <div id="emoLayer" aria-hidden="true"></div>
 <div id="toast" role="status" aria-live="polite"></div>
 
@@ -538,6 +556,7 @@
     <p><b>4.</b> First to crack the other's number wins. If you crack it first in a round, the other player still gets that round's turn to tie.</p>
     <p><b>Emoji:</b> swipe the emoji strip above the keypad and tap one to send it. Hold an emoji to keep sending until you let go.</p>
     <p><b>Same Wi-Fi:</b> games waiting for a player on your Wi-Fi show up on the home screen, so you can join without a code. Untick <b>Show on this Wi-Fi</b> after creating a game to keep it private.</p>
+    <p><b>Pull down to refresh:</b> on the home screen it reloads the page and the list of nearby games. During an online game it re-syncs with your friend's phone without leaving the game.</p>
     <p><b>Solo:</b> tap <b>Play solo</b> to crack a random number on your own. You get 10 guesses.</p>
     <p>For two-player games, keep the page open while you play. Both phones need internet, on any network.</p>
     <h3 class="settings-h">Settings</h3>
@@ -681,8 +700,9 @@
         if (!m || typeof m !== "object" || !m.p || typeof m.p !== "object" || typeof m.ts !== "number") return;
         if (m.ts < remoteTs) return;                       // older copy (the other server, or a retained one)
         const fresh = Date.now() - m.ts < STALE_MS * 2;    // a retained message from a phone that left long ago
+        const isNew = m.ts > remoteTs;                     // a copy we've already seen (re-subscribe) doesn't count as a sign of life
         remoteTs = m.ts; remote = m.p;
-        if (fresh) lastHeard = Date.now();
+        if (fresh && isNew) lastHeard = Date.now();
         emitPeers();
       });
       c.on("error", () => {});
@@ -707,6 +727,19 @@
       },
       onPeers: h => { handlers.push(h); setTimeout(emitPeers, 0); return () => { handlers = handlers.filter(x => x !== h); }; },
       onConnection: h => { connHandlers.push(h); setTimeout(() => h(online()), 0); return () => { connHandlers = connHandlers.filter(x => x !== h); }; },
+      // Pull-to-refresh: re-read the other phone's latest state and re-send mine.
+      refresh: () => new Promise(resolve => {
+        let pending = 0;
+        const done = () => { if (--pending <= 0) { emitPeers(); resolve(online()); } };
+        clients.forEach(c => {
+          if (c.connected) {
+            pending++;
+            c.unsubscribe(theirTopic, () => c.subscribe(theirTopic, { qos: 0 }, () => setTimeout(done, 400)));
+          } else { try { c.reconnect(); } catch (e) {} }
+        });
+        publishNow();
+        if (!pending) setTimeout(() => { emitPeers(); resolve(online()); }, 1200);
+      }),
       leave: async () => {
         closed = true; clearInterval(beat); clearTimeout(pubT);
         clients.forEach(c => {
@@ -1496,6 +1529,67 @@
   } catch (e) {}
 
   $("lanNote").textContent = LAN.visible ? "People on the same Wi-Fi can see and join this game" : "Private: only people with the code can join";
+  // ---------- pull to refresh ----------
+  // Home: reloads the page (new version, fresh list of Wi-Fi games).
+  // Online game screens: re-reads the other phone's state without leaving the game.
+  // Solo: off, there's nothing to refresh.
+  (() => {
+    const main = document.querySelector("main"), ptr = $("ptr"), header = document.querySelector("header");
+    const TH = 64, MAX = 110;
+    let y0 = null, x0 = 0, armed = false, pull = 0, busy = false, top = 0;
+    const canPull = () => !busy && !solo && !document.querySelector(".overlay.open");
+    const paint = () => {
+      ptr.style.transform = "translateY(" + (top - 48 + pull) + "px)";
+      ptr.style.opacity = Math.min(1, pull / TH);
+      ptr.classList.toggle("ready", pull >= TH);
+      main.style.transform = pull ? "translateY(" + pull * 0.35 + "px)" : "";
+    };
+    const reset = () => {
+      ptr.classList.add("settle"); main.classList.add("settle");
+      pull = 0; armed = false; y0 = null; paint();
+      ptr.classList.remove("busy", "ready");
+      setTimeout(() => { ptr.classList.remove("settle"); main.classList.remove("settle"); }, 260);
+    };
+    async function refresh() {
+      busy = true;
+      ptr.classList.add("settle", "busy"); ptr.classList.remove("ready");
+      pull = TH; paint(); main.style.transform = "";
+      if (!S || !named || !named.refresh) { setTimeout(() => location.reload(), 250); return; }
+      const on = await Promise.race([named.refresh(), new Promise(r => setTimeout(() => r(null), 3500))]);
+      render(); lanSync(true);
+      const phase = derive().phase;
+      if (on === false && phase !== "lobby") toast(oppName() + " isn't connected right now", 2200);
+      else toast("Refreshed");
+      reset(); busy = false;
+    }
+    main.addEventListener("touchstart", e => {
+      y0 = null; armed = false;
+      if (!canPull() || e.touches.length !== 1 || main.scrollTop > 0) return;
+      if (e.target.closest("#keyboard, #emojiBar, input, textarea, .nearby-menu")) return;
+      y0 = e.touches[0].clientY; x0 = e.touches[0].clientX;
+      top = header.getBoundingClientRect().bottom;
+    }, { passive: true });
+    main.addEventListener("touchmove", e => {
+      if (y0 === null) return;
+      const dy = e.touches[0].clientY - y0, dx = e.touches[0].clientX - x0;
+      if (!armed) {
+        if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) { y0 = null; return; }
+        if (dy < 10) { if (dy < -4) y0 = null; return; }
+        if (main.scrollTop > 0) { y0 = null; return; }
+        armed = true; y0 += 10;
+      }
+      if (e.cancelable) e.preventDefault();
+      pull = Math.min(MAX, Math.max(0, e.touches[0].clientY - y0) * 0.55);
+      paint();
+    }, { passive: false });
+    const end = () => {
+      if (!armed) { y0 = null; return; }
+      if (pull >= TH) refresh(); else reset();
+    };
+    main.addEventListener("touchend", end);
+    main.addEventListener("touchcancel", () => { if (armed) reset(); y0 = null; });
+  })();
+
   render();
   lanStart();
   window.addEventListener("pagehide", () => { if (LAN.announced) lanPublish(LAN.announced, ""); });
