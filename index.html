@@ -163,7 +163,69 @@
   .join-box:focus-within { border-color: var(--hit); }
   .join-box .code-input { flex: 1; min-width: 0; border: none; background: none; color: var(--fg); padding: 14px 8px; outline: none; font-size: 1.2rem; }
   .join-box .code-input::placeholder { font-size: 0.85rem; letter-spacing: 0.15em; color: var(--muted); }
-  .join-btn { border: none; background: var(--key); color: var(--key-fg); font-weight: 600; font-size: 1rem; padding: 0 24px; }
+  .join-btn { border: none; background: var(--key); color: var(--key-fg); font-weight: 600; font-size: 1rem; padding: 0; display: flex; align-items: center; justify-content: center; gap: 6px; flex: none; width: 98px; }
+  .join-btn svg { width: 18px; height: 18px; flex: none; }
+  .join-btn.scan { background: color-mix(in srgb, var(--hit) 16%, var(--key)); }
+
+  /* ---------- QR scanner (takes the place of the join row) ---------- */
+  .scan-panel {
+    position: relative; width: 100%; aspect-ratio: 4 / 3; max-height: 46vh;
+    border-radius: 14px; overflow: hidden; background: #0d0e10; color: #fff;
+    animation: scanIn 0.22s ease both;
+  }
+  .scan-panel[hidden] { display: none; }
+  @keyframes scanIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
+  .scan-panel video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .scan-frame {
+    position: absolute; left: 50%; top: 46%; width: min(62%, 210px); aspect-ratio: 1; transform: translate(-50%, -50%);
+    border-radius: 18px; box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.42);
+    transition: box-shadow 0.25s ease;
+  }
+  .scan-frame i { position: absolute; width: 28px; height: 28px; border: 4px solid #fff; transition: border-color 0.2s; }
+  .scan-frame i:nth-child(1) { top: 0; left: 0; border-right: 0; border-bottom: 0; border-top-left-radius: 18px; }
+  .scan-frame i:nth-child(2) { top: 0; right: 0; border-left: 0; border-bottom: 0; border-top-right-radius: 18px; }
+  .scan-frame i:nth-child(3) { bottom: 0; left: 0; border-right: 0; border-top: 0; border-bottom-left-radius: 18px; }
+  .scan-frame i:nth-child(4) { bottom: 0; right: 0; border-left: 0; border-top: 0; border-bottom-right-radius: 18px; }
+  .scan-line {
+    position: absolute; left: 10%; right: 10%; top: 10%; height: 2px; border-radius: 2px;
+    background: linear-gradient(90deg, transparent, var(--hit), transparent);
+    box-shadow: 0 0 12px var(--hit); animation: scanLine 1.8s ease-in-out infinite alternate;
+  }
+  @keyframes scanLine { to { top: 90%; } }
+  .scan-check {
+    position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; transform: scale(0.6);
+    transition: opacity 0.2s ease, transform 0.25s cubic-bezier(.3,1.6,.5,1);
+  }
+  .scan-check svg { width: 64px; height: 64px; padding: 14px; border-radius: 50%; background: var(--hit); color: #fff; box-shadow: 0 6px 24px rgba(0,0,0,0.35); }
+  .scan-panel.done .scan-check { opacity: 1; transform: none; }
+  .scan-panel.done .scan-frame i { border-color: var(--hit); }
+  .scan-panel.done .scan-line, .scan-panel.wait .scan-line { display: none; }
+  .scan-cap {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 16px 12px; text-align: center;
+    font-size: 0.9rem; font-weight: 500; background: linear-gradient(transparent, rgba(0,0,0,0.65));
+  }
+  .scan-cap.bad { color: #ffb4ab; }
+  .scan-close {
+    position: absolute; top: 10px; right: 10px; width: 40px; height: 40px; border-radius: 50%;
+    display: grid; place-items: center; border: none; color: #fff;
+    background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+  .scan-close svg { width: 20px; height: 20px; }
+  .scan-spin { position: absolute; left: 50%; top: 46%; width: 34px; height: 34px; margin: -17px 0 0 -17px; border: 3px solid rgba(255,255,255,0.25); border-top-color: #fff; border-radius: 50%; animation: ptrspin 0.8s linear infinite; }
+  .scan-panel:not(.wait) .scan-spin { display: none; }
+  @media (prefers-reduced-motion: reduce) { .scan-line { animation: none; top: 50%; } .scan-panel { animation: none; } }
+
+  /* ---------- QR on the new game screen ---------- */
+  .qr-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .qr-wrap[hidden] { display: none; }
+  .qr-tile {
+    width: 176px; height: 176px; padding: 12px; border-radius: 16px; background: #fff;
+    box-shadow: 0 1px 0 var(--line), 0 6px 20px rgba(0,0,0,0.08); display: grid; place-items: center;
+  }
+  .qr-tile svg { width: 100%; height: 100%; display: block; }
+  .qr-tile.loading { background: linear-gradient(100deg, #f1f2f4 30%, #fafafa 50%, #f1f2f4 70%) 0 0 / 300% 100%; animation: shimmer 1.2s linear infinite; }
+  @keyframes shimmer { to { background-position: -150% 0; } }
+  .qr-wrap small { color: var(--muted); font-size: 0.78rem; }
   .hero { gap: 12px; margin-bottom: 24px; }
   .hero-tiles .tile { width: 54px; font-size: 1.9rem; border-radius: 8px; animation: flip 0.6s ease both; }
   .hero-tiles .tile:nth-child(2) { animation-delay: 0.12s; } .hero-tiles .tile:nth-child(3) { animation-delay: 0.24s; }
@@ -435,6 +497,15 @@
         </div>
       </div>
 
+      <div class="scan-panel wait" id="scanPanel" hidden>
+        <video id="scanVideo" playsinline muted autoplay></video>
+        <div class="scan-frame" aria-hidden="true"><i></i><i></i><i></i><i></i><div class="scan-line"></div></div>
+        <div class="scan-spin" aria-hidden="true"></div>
+        <div class="scan-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+        <div class="scan-cap" id="scanCap" role="status" aria-live="polite">Starting camera…</div>
+        <button class="scan-close" id="scanClose" type="button" aria-label="Close scanner"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+
       <div class="nearby" id="nearby" hidden>
         <button class="nearby-btn" id="nearbyBtn" type="button" aria-expanded="false">
           <span class="nearby-dot" aria-hidden="true"></span>
@@ -456,13 +527,17 @@
     <div class="card" style="align-items:center">
       <h2>Your game code</h2>
       <div class="code-big" id="lobbyCode">-----</div>
+      <div class="qr-wrap" id="qrWrap" hidden>
+        <div class="qr-tile loading" id="qrTile" role="img" aria-label="QR code to join this game"></div>
+        <small>Scan with Numberle or any phone camera</small>
+      </div>
       <button class="btn primary" id="copyBtn">Send invite link</button>
       <label class="lan-toggle" for="lanVisible" id="lanToggle" hidden>
         <input type="checkbox" id="lanVisible" checked>
         <span><b>Show on this Wi-Fi</b><small id="lanNote">People on the same Wi-Fi can see and join this game</small></span>
       </label>
     </div>
-    <p class="hint">Send your friend the invite link, or tell them the code. The game starts as soon as they join. Keep this page open.</p>
+    <p class="hint">Let your friend scan the QR, send them the invite link, or just tell them the code. The game starts as soon as they join. Keep this page open.</p>
     <p class="hint"><span class="dots" id="lobbyWait">Waiting for your friend</span></p>
   </section>
 
@@ -556,6 +631,7 @@
     <p><b>4.</b> First to crack the other's number wins. If you crack it first in a round, the other player still gets that round's turn to tie.</p>
     <p><b>Emoji:</b> swipe the emoji strip above the keypad and tap one to send it. Hold an emoji to keep sending until you let go.</p>
     <p><b>Same Wi-Fi:</b> games waiting for a player on your Wi-Fi show up on the home screen, so you can join without a code. Untick <b>Show on this Wi-Fi</b> after creating a game to keep it private.</p>
+    <p><b>Scan to join:</b> the new game screen shows a QR code. On the other phone, tap <b>Scan</b> next to the code box and point the camera at it. A normal phone camera works too. On a computer, type the code instead.</p>
     <p><b>Pull down to refresh:</b> on the home screen it reloads the page and the list of nearby games. During an online game it re-syncs with your friend's phone without leaving the game.</p>
     <p><b>Solo:</b> tap <b>Play solo</b> to crack a random number on your own. You get 10 guesses.</p>
     <p>For two-player games, keep the page open while you play. Both phones need internet, on any network.</p>
@@ -1226,6 +1302,163 @@
     $("lanVisible").checked = LAN.visible;
     lanSync();
     renderNearby();
+    updateJoinBtn();
+    if (!$("scanPanel").hidden && $("scHome").hidden) closeScan();
+  }
+
+  // ---------- QR codes ----------
+  // Small libraries are loaded only when needed: the QR drawer on the new game
+  // screen, and the QR reader only on phones without a built-in one (iPhone).
+  const LIBS = { qr: "https://unpkg.com/qrcode-generator@1.4.4/qrcode.js", jsqr: "https://unpkg.com/jsqr@1.4.0/dist/jsQR.js" };
+  const scriptLoads = {};
+  function loadScript(url) {
+    if (!scriptLoads[url]) scriptLoads[url] = new Promise((res, rej) => {
+      const s = document.createElement("script"); s.src = url; s.async = true;
+      s.onload = res; s.onerror = () => { delete scriptLoads[url]; s.remove(); rej(new Error("load " + url)); };
+      document.head.appendChild(s);
+    });
+    return scriptLoads[url];
+  }
+  let qrFor = null, qrFailed = false;
+  async function renderQR(text) {
+    if (qrFor === text) return;
+    qrFor = text;
+    const tile = $("qrTile"); tile.classList.add("loading"); tile.replaceChildren();
+    try {
+      if (!window.qrcode) await loadScript(LIBS.qr);
+      if (qrFor !== text) return;
+      const q = window.qrcode(0, "M"); q.addData(text); q.make();
+      const n = q.getModuleCount(), m = 1, size = n + 2 * m;
+      let d = "";
+      for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) d += "M" + (c + m) + " " + (r + m) + "h1v1h-1z";
+      tile.innerHTML = '<svg viewBox="0 0 ' + size + " " + size + '" shape-rendering="crispEdges" aria-hidden="true"><path fill="#131417" d="' + d + '"/></svg>';
+      tile.classList.remove("loading");
+    } catch (e) { qrFor = null; qrFailed = true; $("qrWrap").hidden = true; }
+  }
+
+  // ---------- QR scanner ----------
+  const SCAN = { stream: null, timer: 0, badT: 0, detector: null, canvas: null, lastBad: "", done: false, hasCam: false };
+  // Scan is only offered on phones and tablets that have a camera the page is allowed to use.
+  // Computers, and anything without camera support, just get the Join button.
+  const isHandheld = () => !!(
+    (navigator.userAgentData && navigator.userAgentData.mobile) ||
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+    (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)      // iPad asking for the desktop site
+  );
+  const cameraApi = () => !!(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  const canScan = () => SCAN.hasCam && cameraApi() && isHandheld();
+  async function detectCamera() {
+    if (!cameraApi() || !isHandheld()) { SCAN.hasCam = false; updateJoinBtn(); return; }
+    try {
+      const list = navigator.mediaDevices.enumerateDevices ? await navigator.mediaDevices.enumerateDevices() : null;
+      SCAN.hasCam = !list || list.some(d => d.kind === "videoinput");
+    } catch (e) { SCAN.hasCam = false; }
+    updateJoinBtn();
+  }
+  const SCAN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M7 12h10"/></svg>';
+  function updateJoinBtn() {
+    const b = $("joinBtn"), scan = !$("joinCode").value.trim() && canScan();
+    if (b.dataset.mode === (scan ? "scan" : "join")) return;
+    b.dataset.mode = scan ? "scan" : "join";
+    b.classList.toggle("scan", scan);
+    b.innerHTML = scan ? SCAN_ICON + "<span>Scan</span>" : "Join";
+    b.setAttribute("aria-label", scan ? "Scan a game QR code" : "Join game");
+  }
+  function codeFromText(t) {
+    t = String(t || "").trim();
+    try {
+      const j = new URL(t).searchParams.get("join");
+      if (j && /^[A-Za-z0-9]{5}$/.test(j)) return j.toLowerCase();
+    } catch (e) {}
+    return /^[A-Za-z0-9]{5}$/.test(t) ? t.toLowerCase() : null;
+  }
+  function scanCaption(msg, bad) { const c = $("scanCap"); c.textContent = msg; c.classList.toggle("bad", !!bad); }
+  async function openScan() {
+    if (!canScan() || !$("scanPanel").hidden) return;
+    setNotice("");
+    const panel = $("scanPanel");
+    panel.className = "scan-panel wait"; panel.hidden = false;
+    document.querySelector(".join-row").hidden = true;
+    SCAN.done = false; SCAN.lastBad = "";
+    scanCaption("Starting camera…");
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } } });
+    } catch (e) {
+      if (panel.hidden) return;
+      closeScan();
+      setNotice(e && e.name === "NotAllowedError"
+        ? "Camera access is blocked. Allow it for this site in your browser settings, or type the code."
+        : "Couldn't open the camera. Type the code instead.");
+      return;
+    }
+    if (panel.hidden) { stream.getTracks().forEach(t => t.stop()); return; }   // closed while the permission prompt was up
+    SCAN.stream = stream;
+    const v = $("scanVideo"); v.srcObject = stream;
+    try { await v.play(); } catch (e) {}
+    if (!SCAN.detector) {
+      try {
+        if ("BarcodeDetector" in window && (await BarcodeDetector.getSupportedFormats()).includes("qr_code")) SCAN.detector = new BarcodeDetector({ formats: ["qr_code"] });
+      } catch (e) {}
+    }
+    if (!SCAN.detector && !window.jsQR) {
+      try { await loadScript(LIBS.jsqr); }
+      catch (e) { closeScan(); setNotice("Couldn't load the scanner. Check your connection, or type the code."); return; }
+    }
+    if (SCAN.stream !== stream) return;
+    panel.classList.remove("wait");
+    scanCaption("Point at your friend's QR code");
+    scanTick();
+  }
+  async function scanTick() {
+    if (!SCAN.stream || SCAN.done) return;
+    const v = $("scanVideo");
+    let text = null;
+    if (v.readyState >= 2 && v.videoWidth) {
+      try {
+        if (SCAN.detector) {
+          const r = await SCAN.detector.detect(v);
+          if (r && r[0]) text = r[0].rawValue;
+        } else if (window.jsQR) {
+          const k = Math.min(1, 640 / Math.max(v.videoWidth, v.videoHeight));
+          const w = Math.round(v.videoWidth * k), h = Math.round(v.videoHeight * k);
+          const cv = SCAN.canvas || (SCAN.canvas = document.createElement("canvas"));
+          if (cv.width !== w) cv.width = w;
+          if (cv.height !== h) cv.height = h;
+          const cx = cv.getContext("2d", { willReadFrequently: true });
+          cx.drawImage(v, 0, 0, w, h);
+          const r = window.jsQR(cx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: "attemptBoth" });
+          if (r) text = r.data;
+        }
+      } catch (e) {}
+    }
+    if (text && SCAN.stream && !SCAN.done) handleScan(text);
+    if (SCAN.stream && !SCAN.done) SCAN.timer = setTimeout(scanTick, 120);
+  }
+  function handleScan(text) {
+    const code = codeFromText(text);
+    if (!code) {
+      if (text !== SCAN.lastBad) { SCAN.lastBad = text; fb("bad"); }
+      scanCaption("That's not a Numberle game code", true);
+      clearTimeout(SCAN.badT);
+      SCAN.badT = setTimeout(() => { if (SCAN.stream && !SCAN.done) scanCaption("Point at your friend's QR code"); }, 1800);
+      return;
+    }
+    SCAN.done = true; clearTimeout(SCAN.badT);
+    fb("submit");
+    $("scanPanel").classList.add("done");
+    scanCaption("Joining game " + code.toUpperCase() + "…");
+    $("joinCode").value = code.toUpperCase();
+    setTimeout(() => { closeScan(); enterGame(code, "guest", null); }, 600);
+  }
+  function closeScan() {
+    clearTimeout(SCAN.timer); clearTimeout(SCAN.badT);
+    if (SCAN.stream) SCAN.stream.getTracks().forEach(t => t.stop());
+    SCAN.stream = null;
+    $("scanVideo").srcObject = null;
+    $("scanPanel").hidden = true;
+    document.querySelector(".join-row").hidden = false;
+    updateJoinBtn();
   }
 
   function renderMain() {
@@ -1251,6 +1484,8 @@
       show("scLobby"); kb.hidden = true;
       $("lobbyCode").textContent = S.code.toUpperCase();
       $("copyBtn").hidden = S.role !== "host";
+      $("qrWrap").hidden = S.role !== "host" || qrFailed;
+      if (S.role === "host" && !qrFailed) renderQR(inviteLink());
       $("lobbyWait").textContent = S.role === "host" ? "Waiting for your friend" : "Waiting for the game's creator";
       prev.phase = d.phase;
       return;
@@ -1443,12 +1678,17 @@
   });
   $("emojiBar").addEventListener("contextmenu", e => e.preventDefault());
   $("createBtn").onclick =() => enterGame(makeCode(), "host", null);
-  $("joinBtn").onclick = () => {
+  function joinTyped() {
     const code = $("joinCode").value.toLowerCase().replace(/[^a-z0-9]/g, "");
     if (code.length !== 5) { setNotice("Enter the 5-character code your friend gave you."); return; }
     enterGame(code, "guest", null);
-  };
-  $("joinCode").addEventListener("keydown", e => { if (e.key === "Enter") $("joinBtn").click(); });
+  }
+  $("joinBtn").onclick = () => { if ($("joinBtn").classList.contains("scan")) openScan(); else joinTyped(); };
+  $("joinCode").addEventListener("keydown", e => { if (e.key === "Enter") joinTyped(); });
+  $("joinCode").addEventListener("input", updateJoinBtn);
+  $("scanClose").onclick = () => { closeScan(); $("joinBtn").focus(); };
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("scanPanel").hidden) closeScan(); });
+  document.addEventListener("visibilitychange", () => { if (document.hidden && !$("scanPanel").hidden) closeScan(); });
   $("nearbyBtn").onclick = () => {
     const list = nearbyGames();
     if (list.length === 1) joinNearby(list[0].code);
@@ -1565,7 +1805,7 @@
     main.addEventListener("touchstart", e => {
       y0 = null; armed = false;
       if (!canPull() || e.touches.length !== 1 || main.scrollTop > 0) return;
-      if (e.target.closest("#keyboard, #emojiBar, input, textarea, .nearby-menu")) return;
+      if (e.target.closest("#keyboard, #emojiBar, input, textarea, .nearby-menu, .scan-panel")) return;
       y0 = e.touches[0].clientY; x0 = e.touches[0].clientX;
       top = header.getBoundingClientRect().bottom;
     }, { passive: true });
@@ -1591,6 +1831,8 @@
   })();
 
   render();
+  detectCamera();
+  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener("devicechange", detectCamera);
   lanStart();
   window.addEventListener("pagehide", () => { if (LAN.announced) lanPublish(LAN.announced, ""); });
   if (!load(STORE + "-seen", false)) { store(STORE + "-seen", true); $("helpModal").classList.add("open"); }
