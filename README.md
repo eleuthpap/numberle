@@ -53,11 +53,19 @@ Tap **Play solo** and crack a random number in **10 guesses**. Your best score i
 
 ## How the online game works
 
-There's no game server. When you create a game, your phone registers its code with [PeerJS](https://peerjs.com/), a free service that only introduces the two phones to each other. After that, the phones talk **directly**, the same way a video call connects.
+The two phones never connect to each other directly. Instead, they meet on a shared "notice board" in the cloud:
 
-Your secret number **never leaves your phone**. When your friend guesses, their guess is sent to you, your phone works out the colors, and only the colors go back. Both numbers are revealed when the game ends.
+1. **The game code is a spot on the board.** Each game gets two slots, one for each player.
+2. **Each phone posts to its own slot.** Every time something changes (your name, your guesses, the colors you gave your friend's guesses), your phone posts its latest state. It also re-posts every few seconds, so the other phone knows you're still there.
+3. **Each phone watches the other slot.** As soon as your friend posts, your phone gets it, usually within a second or two.
 
-> **Stuck on "Waiting"?** Some mobile networks block direct connections between phones. Switching one phone to Wi-Fi usually fixes it.
+This uses [MQTT](https://mqtt.org/), a lightweight messaging system, through two free public servers (HiveMQ and EMQX) at the same time. If one is down, the game carries on through the other. Because each phone just connects to a server, the same way it opens a web page, it works on any Wi-Fi or mobile network.
+
+Your secret number **never leaves your phone**. When your friend guesses, only their guess is sent to you. Your phone works out the colors, and only the colors go back. Both numbers are revealed when the game ends.
+
+> **Good to know:** the servers are public, so names, guesses and colors pass through them as they are. Someone who knew your game code could in theory read along, but your secret number is never sent.
+
+> **Stuck on "Waiting"?** Make sure you're both on the latest version: close the page and open the link again.
 
 ## Run it yourself
 
