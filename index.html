@@ -733,6 +733,23 @@
   }
   const CLS = { c: "correct", p: "present", a: "absent" };
 
+  // ---------- fair play: lock the number in, check it at the end ----------
+  // When you lock in your number, your phone sends only a fingerprint (SHA-256) of the number
+  // plus a random salt. At the end of the round it sends the number and the salt. The other
+  // phone checks the fingerprint and re-scores every guess against the number, so a phone that
+  // sent made-up colors, or changed its number mid-round, is caught. The salt matters: with
+  // only 100,000 possible numbers, a fingerprint of the number alone could be cracked instantly.
+  const REVEAL_MS = 20000;   // the other phone is online but hasn't shown its number for this long
+  function randHex(bytes) {
+    const a = new Uint8Array(bytes); crypto.getRandomValues(a);
+    return Array.from(a, b => b.toString(16).padStart(2, "0")).join("");
+  }
+  async function sha256(s) {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+    return Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, "0")).join("");
+  }
+  const commitOf = (secret, salt) => sha256("numberle:" + secret + ":" + salt);
+
   // ---------- state ----------
   // S: my side of the current game, kept in localStorage so a reload can resume.
   let S = null;
@@ -993,9 +1010,22 @@
     return {
       g: {
         v: 1, id: myId, role: S.role, name: myName(), round: S.round,
-        ready: !!S.secret, guesses: S.guesses, marks: S.marks, reveal: S.reveal
+        ready: !!(S.secret && S.commit), commit: S.commit || null,
+        guesses: S.guesses, marks: S.marks, reveal: S.reveal,
+        salt: S.reveal ? S.salt : null,
+        last: S.last || null     // the previous round's number and salt, in case the other phone missed them
       }
     };
+  }
+  // Make (or remake after a reload) the fingerprint for my locked-in number.
+  function ensureCommit() {
+    if (!S || !S.secret || S.commit) return;
+    if (!S.salt) { S.salt = randHex(16); save(); }
+    const round = S.round, secret = S.secret, salt = S.salt;
+    commitOf(secret, salt).then(c => {
+      if (!S || S.round !== round || S.secret !== secret || S.commit) return;
+      S.commit = c; save(); publish(); reconcile(); render();
+    }).catch(() => toast("This browser can't lock in your number securely.", 4000));
   }
   function publish() {
     if (named && S) named.presence(publicState()).catch(() => {});
@@ -1007,20 +1037,29 @@
   // ---------- validate what the other phone sends ----------
   const digits5 = s => typeof s === "string" && /^[0-9]{5}$/.test(s);
   const mark5 = s => typeof s === "string" && /^[cpa]{5}$/.test(s);
+  const hex = n => s => typeof s === "string" && new RegExp("^[0-9a-f]{" + n + "}$").test(s);
+  const hash64 = hex(64), salt32 = hex(32);
   function readOpp(p) {
     const g = p && p.presence && p.presence.g;
     if (!g || g.v !== 1 || typeof g.id !== "string" || g.id === myId) return null;
     if (g.role !== "host" && g.role !== "guest") return null;
     if (g.role === S.role) return null;
     if (S.oppId && g.id !== S.oppId) return null;
+    const commit = hash64(g.commit) ? g.commit : null;
+    const last = g.last && Number.isInteger(g.last.round) && digits5(g.last.reveal) && salt32(g.last.salt)
+      ? { round: g.last.round, reveal: g.last.reveal, salt: g.last.salt } : null;
     return {
       id: g.id,
       name: typeof g.name === "string" ? g.name.slice(0, 16) : "Friend",
       round: Number.isInteger(g.round) ? g.round : 0,
-      ready: g.ready === true,
+      ready: g.ready === true && !!commit,      // no fingerprint, no game
+      outdated: g.ready === true && !commit,    // an older version of the page that doesn't lock its number in
+      commit,
       guesses: Array.isArray(g.guesses) ? g.guesses.filter(digits5).slice(0, MAX) : [],
       marks: Array.isArray(g.marks) ? g.marks.filter(mark5).slice(0, MAX) : [],
-      reveal: digits5(g.reveal) ? g.reveal : null
+      reveal: digits5(g.reveal) ? g.reveal : null,
+      salt: salt32(g.salt) ? g.salt : null,
+      last
     };
   }
 
@@ -1041,12 +1080,15 @@
     if (opp.round !== S.round) return { phase: "rematch" };
     if (!S.secret || !opp.ready) return { phase: "setup" };
 
-    const myMarks = opp.marks.slice(0, S.guesses.length);   // their marks on my guesses
+    // their marks on my guesses, as I first saw them (a mark can't be changed afterwards)
+    const myMarks = opp.marks.slice(0, S.guesses.length).map((m, i) => (S.seen && S.seen[i]) || m);
     const theirMarks = S.marks;                              // my marks on their guesses
     const mySolve = myMarks.indexOf(SOLVED), theirSolve = theirMarks.indexOf(SOLVED);
     const ms = mySolve < 0 ? Infinity : mySolve, ts = theirSolve < 0 ? Infinity : theirSolve;
     const rounds = Math.min(myMarks.length, theirMarks.length);
-    const over = Math.min(ms, ts) < rounds || rounds >= MAX;
+    const v = verdictNow();
+    const cheated = !!(v && !v.ok);
+    const over = cheated || Math.min(ms, ts) < rounds || rounds >= MAX;
 
     let myTurn = false;
     if (!over) {
@@ -1055,15 +1097,56 @@
       myTurn = balanced && myMarks.length === mine && mine < MAX;
     }
     let result = null;
-    if (over) result = ms < ts ? "win" : ts < ms ? "lose" : "draw";
-    return { phase: over ? "over" : "play", myMarks, theirMarks, ms, ts, over, myTurn, result };
+    if (over) result = cheated ? "win" : ms < ts ? "win" : ts < ms ? "lose" : "draw";
+    return { phase: over ? "over" : "play", myMarks, theirMarks, ms, ts, over, myTurn, result,
+             cheated, why: cheated ? v.why : "", checked: !!v };
+  }
+  // The outcome of checking the other player's number for this round: null while we can't tell yet.
+  function verdictNow() { return S && S.verdict && S.verdict.round === S.round ? S.verdict : null; }
+  function setVerdict(ok, why) {
+    if (verdictNow()) return false;
+    S.verdict = { round: S.round, ok, why: why || "" };
+    if (!ok) toast(oppName() + " " + why + ". You win this round.", 4000);
+    return true;
+  }
+
+  // Check the number the other player showed against the fingerprint they locked in, and
+  // re-score every one of my guesses against it.
+  let checking = false;
+  function checkReveal(src) {
+    if (checking || verdictNow()) return;
+    checking = true;
+    const round = S.round, guesses = S.guesses.slice(), seen = (S.seen || []).slice();
+    const commit = S.oppCommit;
+    commitOf(src.reveal, src.salt).then(h => {
+      checking = false;
+      if (!S || S.round !== round || verdictNow()) return;
+      let why = "";
+      if (!commit || h !== commit) why = "showed a different number from the one they locked in";
+      else if (seen.some((m, i) => m !== score(guesses[i], src.reveal))) why = "gave your guesses colors that don't match their number";
+      setVerdict(!why, why);
+      save(); reconcile(); render();
+    }).catch(() => { checking = false; });
   }
 
   // ---------- keep my side in step with the opponent ----------
   function reconcile() {
     if (!S) return;
     let changed = false;
-    if (opp && opp.round === S.round && S.secret) {
+    if (opp && opp.round === S.round && !verdictNow()) {
+      // The fingerprint and each mark count as first received; changing them later is cheating.
+      if (opp.commit) {
+        if (!S.oppCommit) { S.oppCommit = opp.commit; changed = true; }
+        else if (opp.commit !== S.oppCommit) changed = setVerdict(false, "changed their number mid-round");
+      }
+      const seen = S.seen || (S.seen = []);
+      const n = Math.min(opp.marks.length, S.guesses.length);
+      for (let i = 0; i < n && !verdictNow(); i++) {
+        if (seen[i] === undefined) { seen[i] = opp.marks[i]; changed = true; }
+        else if (seen[i] !== opp.marks[i]) changed = setVerdict(false, "changed a color they'd already given");
+      }
+    }
+    if (opp && opp.round === S.round && S.secret && S.commit) {
       while (S.marks.length < opp.guesses.length && S.marks.length < MAX) {
         S.marks.push(score(opp.guesses[S.marks.length], S.secret));
         changed = true;
@@ -1071,9 +1154,25 @@
     }
     const d = derive();
     if (d.over && !S.reveal) { S.reveal = S.secret; changed = true; }
-    if (d.over && S.scored !== S.round) {
+    if (d.over && (S.overSeen !== S.round || S.outcome !== d.result)) { S.overSeen = S.round; S.outcome = d.result; changed = true; }
+
+    // Check the other player's number as soon as they show it: normally at the end of the round,
+    // or with their rematch if we missed it. A phone that ends the round early on its own is checked too.
+    const src = !opp ? null : opp.round === S.round ? (opp.reveal && opp.salt ? opp : null)
+      : opp.last && opp.last.round === S.round ? opp.last : null;
+    if (src && !verdictNow()) { S.revealWait = null; checkReveal(src); }
+    else if (S.overSeen === S.round && opp && !verdictNow()) {
+      if (opp.round > S.round) changed = setVerdict(false, "started a rematch without showing their number");
+      else if (!oppOnline) { if (S.revealWait) { S.revealWait = null; changed = true; } }
+      else if (!S.revealWait) { S.revealWait = Date.now(); changed = true; }
+      else if (Date.now() - S.revealWait > REVEAL_MS) changed = setVerdict(false, "didn't show their number");
+    }
+    // The score only counts once the other player's number has been checked.
+    const v = verdictNow();
+    if (v && S.overSeen === S.round && S.scored !== S.round) {
+      const res = v.ok ? S.outcome : "win";
       const t = S.tally || (S.tally = { w: 0, l: 0, d: 0 });
-      t[d.result === "win" ? "w" : d.result === "lose" ? "l" : "d"]++;
+      t[res === "win" ? "w" : res === "lose" ? "l" : "d"]++;
       S.scored = S.round; changed = true;
     }
     if (changed) { save(); publish(); }
@@ -1122,6 +1221,7 @@
     oppEmoSeen = null; myEmoList = [];
     prev = { myMarked: 0, oppMarked: 0, myTurn: null, over: false, phase: "" };
     save();
+    ensureCommit();
     unsubs.push(named.onPeers(onPeers, () => toast("Lost connection to the game")));
     unsubs.push(named.onConnection(c => { if (c) publish(); render(); }, () => {}));
     publish();
@@ -1157,8 +1257,8 @@
       if (d.phase !== "setup" && S.guesses.includes(entry)) { toast("You already tried that one"); shakeEntry(); fb("bad"); return; }
       fb("submit");
       if (d.phase === "setup") {
-        S.secret = entry; entry = "";
-        save(); publish(); reconcile();
+        S.secret = entry; S.salt = randHex(16); S.commit = null; entry = "";
+        save(); ensureCommit();     // "ready" goes out once the fingerprint is made
       } else {
         S.guesses.push(entry); entry = "";
         save(); publish();
@@ -1710,12 +1810,14 @@
         kb.hidden = true;
       } else {
         const away = !oppOnline;
-        const oppState = away ? "Offline" : opp && opp.ready ? "Ready" : "Choosing";
+        const oppState = away ? "Offline" : opp && opp.ready ? "Ready" : opp && opp.outdated ? "Needs update" : "Choosing";
         statusHTML(st, oppName(), codeLabel, oppState, away ? "off" : opp && opp.ready ? "go" : "wait");
         if (S.secret) {
           $("secretRow").replaceChildren(buildRow(S.secret, null));
           $("secretRow").classList.add("locked"); $("pickTools").hidden = true;
-          $("setupHint").textContent = "\u2713 Locked in. Waiting for " + oppName() + " to pick a number.";
+          $("setupHint").textContent = opp && opp.outdated && oppOnline
+            ? oppName() + " is on an older version of the game. Ask them to reload the page."
+            : "\u2713 Locked in. Waiting for " + oppName() + " to pick a number.";
           kb.hidden = true;
         } else {
           $("secretRow").replaceChildren(buildRow(entry, null, { entry: true }));
@@ -1772,14 +1874,20 @@
     if (dd.over) {
       box.hidden = false;
       const n = dd.result === "win" ? dd.ms + 1 : dd.result === "lose" ? dd.ts + 1 : (isFinite(dd.ms) ? dd.ms + 1 : 0);
-      const title = dd.result === "win" ? "You win!" : dd.result === "lose" ? oppName() + " wins" : n ? "It's a draw!" : "Nobody cracked it";
-      const sub = dd.result === "win" ? "You cracked it in " + n + (n === 1 ? " guess." : " guesses.")
+      const title = dd.cheated ? "You win!" : dd.result === "win" ? "You win!" : dd.result === "lose" ? oppName() + " wins" : n ? "It's a draw!" : "Nobody cracked it";
+      const sub = dd.cheated ? oppName() + " " + dd.why + "."
+        : dd.result === "win" ? "You cracked it in " + n + (n === 1 ? " guess." : " guesses.")
         : dd.result === "lose" ? oppName() + " cracked your number in " + n + (n === 1 ? " guess." : " guesses.")
         : n ? "You both cracked it in " + n + "." : "8 guesses each, no winner.";
       box.innerHTML = "";
       const h = document.createElement("h2"); h.textContent = title;
       const p = document.createElement("p"); p.className = "hint"; p.textContent = sub;
       box.append(h, p);
+      if (!dd.checked) {
+        const w = document.createElement("p"); w.className = "hint";
+        w.textContent = "Checking " + oppName() + "'s number…";
+        box.append(w);
+      }
       const t = S.tally;
       if (t && (t.w + t.l + t.d) > 0) {
         const sc = document.createElement("p"); sc.className = "hint";
@@ -1822,7 +1930,10 @@
 
   function startRematch() {
     const target = opp && opp.round > S.round ? opp.round : S.round + 1;
+    S.last = S.reveal && S.salt ? { round: S.round, reveal: S.reveal, salt: S.salt } : null;
     S.round = target; S.secret = null; S.guesses = []; S.marks = []; S.reveal = null;
+    S.salt = null; S.commit = null; S.oppCommit = null; S.seen = []; S.verdict = null;
+    S.overSeen = null; S.outcome = null; S.revealWait = null;
     entry = ""; prev.myMarked = 0; prev.oppMarked = 0; prev.over = false; prev.myTurn = null;
     save(); publish(); render();
   }

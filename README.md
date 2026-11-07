@@ -63,6 +63,8 @@ This uses [MQTT](https://mqtt.org/), a lightweight messaging system, through two
 
 Your secret number **never leaves your phone**. When your friend guesses, only their guess is sent to you. Your phone works out the colors, and only the colors go back. Both numbers are revealed when the game ends.
 
+**No cheating.** When you lock in your number, your phone sends a fingerprint of it, mixed with a random code so the fingerprint can't be cracked. When the round ends, each phone checks that the number the other player shows matches that fingerprint, and re-checks every color it was given against it. If someone changed their number mid-round, gave wrong colors, changed a color afterwards, or won't show their number at the end, the other player is told and gets the win.
+
 > **Good to know:** the servers are public, so names, guesses and colors pass through them as they are. Someone who knew your game code could in theory read along, but your secret number is never sent.
 
 > **Stuck on "Waiting"?** Make sure you're both on the latest version: close the page and open the link again.
